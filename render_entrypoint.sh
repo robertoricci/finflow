@@ -23,8 +23,8 @@ print('Tabela alembic_version removida.')
     flask db upgrade
 }
 
-echo "Seed..."
-##python seed.py
+echo "Make..."
+python make_admin.py
 
 echo "Iniciando servidor..."
 exec gunicorn -w 2 -b 0.0.0.0:$PORT "wsgi:app"

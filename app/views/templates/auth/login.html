@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Entrar{% endblock %}
+
+{% block extra_style %}
+.auth-wrap {
+  min-height: 100vh; display: flex;
+  background: radial-gradient(ellipse 80% 60% at 60% 0%, rgba(79,124,255,0.12) 0%, transparent 60%),
+              radial-gradient(ellipse 50% 50% at 10% 100%, rgba(34,197,94,0.07) 0%, transparent 60%),
+              var(--bg);
+}
+.auth-art {
+  flex: 1; display: flex; flex-direction: column; justify-content: center;
+  padding: 60px; position: relative; overflow: hidden;
+}
+@media (max-width: 768px) { .auth-art { display: none; } }
+.auth-logo { font-size: 28px; font-weight: 700; color: var(--accent); letter-spacing: -1px; margin-bottom: 48px; display: flex; align-items: center; gap: 10px; }
+.auth-headline { font-size: 42px; font-weight: 700; line-height: 1.2; margin-bottom: 20px; letter-spacing: -1px; }
+.auth-headline span { color: var(--accent); }
+.auth-sub { color: var(--text2); font-size: 16px; line-height: 1.7; max-width: 400px; }
+.auth-features { margin-top: 40px; display: flex; flex-direction: column; gap: 16px; }
+.auth-feat { display: flex; align-items: center; gap: 14px; color: var(--text2); font-size: 14px; }
+.auth-feat .feat-icon { width: 36px; height: 36px; border-radius: 10px; background: var(--bg3); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--accent); flex-shrink: 0; }
+.auth-panel {
+  width: 440px; flex-shrink: 0; padding: 60px 48px;
+  background: var(--bg2); display: flex; flex-direction: column; justify-content: center;
+  border-left: 1px solid var(--border);
+}
+@media (max-width: 768px) { .auth-panel { width: 100%; padding: 40px 24px; border-left: none; } }
+.auth-title { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 6px; }
+.auth-sub2 { color: var(--text2); font-size: 14px; margin-bottom: 32px; }
+.auth-link { color: var(--accent); font-weight: 600; }
+.auth-link:hover { text-decoration: underline; }
+.input-icon-wrap { position: relative; }
+.input-icon-wrap .form-control { padding-left: 42px; }
+.input-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--text3); pointer-events: none; }
+.btn-full { width: 100%; justify-content: center; padding: 13px; font-size: 15px; margin-top: 8px; }
+.divider { display: flex; align-items: center; gap: 14px; margin: 24px 0; color: var(--text3); font-size: 12px; }
+.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.grid-orbs { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.orb { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .25; }
+{% endblock %}
+
+{% block body %}
+<div class="auth-wrap">
+  <div class="auth-art">
+    <div class="grid-orbs">
+      <div class="orb" style="width:400px;height:400px;background:var(--accent);top:-100px;left:-100px;"></div>
+      <div class="orb" style="width:300px;height:300px;background:var(--green);bottom:50px;right:80px;"></div>
+    </div>
+    <div class="auth-logo">
+      <i data-lucide="trending-up" style="width:28px;height:28px;"></i>
+      FinFlow
+    </div>
+    <h1 class="auth-headline">Controle seu <span>dinheiro</span><br>com inteligência.</h1>
+    <p class="auth-sub">Lançamentos, análises, relatórios e muito mais — tudo em um só lugar, para você e sua equipe.</p>
+    <div class="auth-features">
+      <div class="auth-feat">
+        <div class="feat-icon"><i data-lucide="layers" style="width:16px;height:16px;"></i></div>
+        Multi-contas e multi-usuários
+      </div>
+      <div class="auth-feat">
+        <div class="feat-icon"><i data-lucide="bar-chart-2" style="width:16px;height:16px;"></i></div>
+        Análises e gráficos em tempo real
+      </div>
+      <div class="auth-feat">
+        <div class="feat-icon"><i data-lucide="repeat" style="width:16px;height:16px;"></i></div>
+        Lançamentos recorrentes e parcelados
+      </div>
+    </div>
+  </div>
+
+  <div class="auth-panel">
+    <h2 class="auth-title">Bem-vindo de volta</h2>
+    <p class="auth-sub2">Não tem conta? <a href="{{ url_for('auth.register') }}" class="auth-link">Cadastre-se grátis</a></p>
+
+    <form method="POST" id="login-form">
+      <div class="form-group">
+        <label class="form-label">E-mail</label>
+        <div class="input-icon-wrap">
+          <i data-lucide="mail" class="input-icon" style="width:16px;height:16px;"></i>
+          <input type="email" name="email" class="form-control" placeholder="seu@email.com" required autocomplete="email"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Senha</label>
+        <div class="input-icon-wrap">
+          <i data-lucide="lock" class="input-icon" style="width:16px;height:16px;"></i>
+          <input type="password" name="password" class="form-control" placeholder="••••••••" required autocomplete="current-password"/>
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2);cursor:pointer;margin-bottom:8px;">
+        <input type="checkbox" name="remember" style="accent-color:var(--accent);width:16px;height:16px;"> Lembrar-me
+      </label>
+      <button type="submit" class="btn btn-primary btn-full">
+        <i data-lucide="log-in" style="width:16px;height:16px;"></i> Entrar
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}

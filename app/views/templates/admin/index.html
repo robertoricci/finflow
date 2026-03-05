@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FinFlow — Painel Admin</title>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    :root {
+      --bg1:#0e1117;--bg2:#151821;--bg3:#1c2030;--bg4:#232838;
+      --border:#2a2f3f;--text:#e8eaf0;--text2:#9097b0;--text3:#5a6278;
+      --accent:#4f7cff;--green:#22c55e;--red:#f43f5e;--yellow:#f59e0b;--purple:#a78bfa;
+      --radius:12px;--radius-sm:8px;--transition:all .18s ease;
+      --gold:#f59e0b;--silver:#9097b0;--bronze:#cd7f32;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg1);color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:14px;min-height:100vh;display:flex;}
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+    /* Sidebar */
+    .sidebar{width:220px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;height:100vh;position:sticky;top:0;}
+    .sidebar-logo{padding:20px 16px 16px;border-bottom:1px solid var(--border);}
+    .logo-text{font-size:18px;font-weight:700;color:var(--accent);}
+    .logo-badge{font-size:10px;background:var(--red);color:#fff;padding:2px 6px;border-radius:99px;margin-left:6px;font-weight:700;letter-spacing:.5px;}
+    .nav{flex:1;padding:12px 8px;overflow-y:auto;}
+    .nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius-sm);cursor:pointer;color:var(--text2);font-size:13px;font-weight:500;transition:var(--transition);margin-bottom:2px;}
+    .nav-item:hover{background:var(--bg3);color:var(--text);}
+    .nav-item.active{background:rgba(79,124,255,.15);color:var(--accent);}
+    .sidebar-footer{padding:14px;border-top:1px solid var(--border);}
+    .user-card{display:flex;align-items:center;gap:10px;padding:8px;border-radius:var(--radius-sm);cursor:pointer;transition:var(--transition);}
+    .user-card:hover{background:var(--bg3);}
+    .user-avatar{width:32px;height:32px;border-radius:50%;background:var(--red);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;}
+    .user-name{font-size:13px;font-weight:600;}
+    .user-role{font-size:11px;color:var(--red);font-weight:600;}
+
+    /* Main */
+    .main{flex:1;display:flex;flex-direction:column;min-height:100vh;overflow:hidden;}
+    .topbar{height:56px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:12px;flex-shrink:0;}
+    .topbar-title{font-size:15px;font-weight:600;}
+    .content{flex:1;padding:24px;overflow-y:auto;}
+
+    /* Cards */
+    .card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:0;}
+    .card-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+    .card-title{font-size:14px;font-weight:600;}
+    .card-body{padding:18px;}
+    .stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px;}
+    .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;}
+    .stat-value{font-size:28px;font-weight:700;font-family:'JetBrains Mono',monospace;margin:6px 0 2px;}
+    .stat-label{font-size:12px;color:var(--text2);}
+
+    /* Table */
+    .table-wrap{overflow-x:auto;}
+    table{width:100%;border-collapse:collapse;}
+    th{text-align:left;padding:10px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);border-bottom:1px solid var(--border);}
+    td{padding:12px 14px;border-bottom:1px solid var(--border);font-size:13px;}
+    tr:last-child td{border-bottom:none;}
+    tr:hover td{background:var(--bg3);}
+
+    /* Badges */
+    .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;white-space:nowrap;}
+    .badge-green{background:rgba(34,197,94,.15);color:var(--green);}
+    .badge-red{background:rgba(244,63,94,.15);color:var(--red);}
+    .badge-yellow{background:rgba(245,158,11,.15);color:var(--yellow);}
+    .badge-blue{background:rgba(79,124,255,.15);color:var(--accent);}
+    .badge-gray{background:rgba(144,151,176,.1);color:var(--text2);}
+    .badge-gold{background:rgba(245,158,11,.15);color:var(--gold);}
+    .badge-silver{background:rgba(144,151,176,.15);color:var(--silver);}
+    .badge-bronze{background:rgba(205,127,50,.15);color:var(--bronze);}
+    .badge-admin{background:rgba(244,63,94,.15);color:var(--red);}
+
+    /* Buttons */
+    .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:var(--transition);}
+    .btn-primary{background:var(--accent);color:#fff;}
+    .btn-primary:hover{background:#3d6ce0;}
+    .btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border);}
+    .btn-ghost:hover{background:var(--bg3);color:var(--text);}
+    .btn-danger{background:rgba(244,63,94,.15);color:var(--red);border:1px solid rgba(244,63,94,.3);}
+    .btn-danger:hover{background:var(--red);color:#fff;}
+    .btn-sm{padding:5px 10px;font-size:12px;}
+    .btn-icon{background:none;border:none;cursor:pointer;color:var(--text3);padding:5px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;transition:var(--transition);}
+    .btn-icon:hover{background:var(--bg3);color:var(--text);}
+
+    /* Modal */
+    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center;}
+    .modal-overlay.open{display:flex;}
+    .modal-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;}
+    .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+    .modal-title{font-size:16px;font-weight:700;}
+    .modal-close{background:none;border:none;cursor:pointer;color:var(--text3);padding:4px;}
+    .modal-close:hover{color:var(--text);}
+    .form-group{margin-bottom:14px;}
+    .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .form-label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px;}
+    .form-control{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px;color:var(--text);font-size:13px;outline:none;transition:var(--transition);}
+    .form-control:focus{border-color:var(--accent);}
+    select.form-control option{background:var(--bg3);}
+
+    /* Toast */
+    .toast-wrap{position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px;}
+    .toast{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;display:flex;align-items:center;gap:10px;min-width:260px;box-shadow:0 4px 20px rgba(0,0,0,.4);animation:slideIn .2s ease;}
+    @keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:none;opacity:1}}
+    .toast.success{border-left:3px solid var(--green);}
+    .toast.danger{border-left:3px solid var(--red);}
+
+    /* Search */
+    .search-bar{display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 12px;flex:1;max-width:320px;}
+    .search-bar input{background:none;border:none;outline:none;color:var(--text);font-size:13px;width:100%;}
+    .spinner{width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* Views */
+    .view{display:none;}.view.active{display:block;}
+    .page-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;}
+    .page-hdr-left h2{font-size:20px;font-weight:700;}
+    .page-hdr-left p{font-size:13px;color:var(--text2);margin-top:2px;}
+
+    /* Toggle switch */
+    .toggle{position:relative;display:inline-block;width:36px;height:20px;}
+    .toggle input{opacity:0;width:0;height:0;}
+    .toggle-slider{position:absolute;inset:0;background:var(--bg4);border-radius:99px;cursor:pointer;transition:.3s;}
+    .toggle-slider:before{content:'';position:absolute;width:14px;height:14px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s;}
+    .toggle input:checked + .toggle-slider{background:var(--green);}
+    .toggle input:checked + .toggle-slider:before{transform:translateX(16px);}
+  </style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sidebar-logo">
+    <span class="logo-text">FinFlow</span>
+    <span class="logo-badge">ADMIN</span>
+  </div>
+  <nav class="nav">
+    <div class="nav-item active" id="nav-overview" onclick="showView('overview')">
+      <i data-lucide="layout-dashboard" style="width:16px;height:16px;"></i> Visão Geral
+    </div>
+    <div class="nav-item" id="nav-users" onclick="showView('users')">
+      <i data-lucide="users" style="width:16px;height:16px;"></i> Usuários
+    </div>
+    <div class="nav-item" id="nav-messages" onclick="showView('messages')">
+      <i data-lucide="send" style="width:16px;height:16px;"></i> Enviar Mensagem
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="user-card" onclick="window.location='/auth/logout'">
+      <div class="user-avatar">{{ current_user.name[0].upper() }}</div>
+      <div>
+        <div class="user-name">{{ current_user.name }}</div>
+        <div class="user-role">ADMIN</div>
+      </div>
+    </div>
+    <a href="/" style="display:flex;align-items:center;gap:8px;padding:8px 10px;margin-top:4px;border-radius:var(--radius-sm);color:var(--text2);font-size:12px;text-decoration:none;transition:var(--transition);" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      <i data-lucide="arrow-left" style="width:13px;height:13px;"></i> Voltar ao sistema
+    </a>
+    <a href="/auth/logout" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--radius-sm);color:var(--red);font-size:12px;text-decoration:none;transition:var(--transition);" onmouseover="this.style.background='rgba(244,63,94,.08)'" onmouseout="this.style.background=''">
+      <i data-lucide="log-out" style="width:13px;height:13px;"></i> Sair
+    </a>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+  <div class="topbar">
+    <span class="topbar-title" id="topbar-title">Painel Administrativo</span>
+  </div>
+  <div class="content">
+
+    <!-- OVERVIEW -->
+    <div class="view active" id="view-overview">
+      <div class="page-hdr">
+        <div class="page-hdr-left"><h2>Visão Geral</h2><p>Resumo da plataforma</p></div>
+      </div>
+      <div class="stat-grid" id="stat-grid">
+        <div style="text-align:center;padding:30px;"><div class="spinner" style="margin:0 auto;"></div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Usuários por Plano</span></div>
+          <div class="card-body" id="overview-by-role"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Status de Assinatura</span></div>
+          <div class="card-body" id="overview-by-status"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- USERS -->
+    <div class="view" id="view-users">
+      <div class="page-hdr">
+        <div class="page-hdr-left"><h2>Usuários</h2><p>Gerencie todos os usuários cadastrados</p></div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <div class="search-bar">
+            <i data-lucide="search" style="width:14px;height:14px;color:var(--text3);"></i>
+            <input type="text" id="user-search" placeholder="Buscar por nome ou e-mail…" oninput="filterUsers()"/>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="openUserModal()">
+            <i data-lucide="plus" style="width:14px;height:14px;"></i> Novo Usuário
+          </button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Usuário</th><th>Plano</th><th>Assinatura</th><th>Vencimento</th><th>Cadastro</th><th>Status</th><th style="text-align:right;">Ações</th>
+            </tr></thead>
+            <tbody id="users-tbody">
+              <tr><td colspan="7" style="text-align:center;padding:30px;"><div class="spinner" style="margin:0 auto;"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- MESSAGES -->
+    <div class="view" id="view-messages">
+      <div class="page-hdr">
+        <div class="page-hdr-left"><h2>Enviar Mensagem</h2><p>Envie notificações para usuários — aparecerão no sininho deles</p></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;">
+
+        <!-- Formulário -->
+        <div class="card">
+          <div class="card-header"><span class="card-title">Nova Mensagem</span></div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Destinatários</label>
+              <select class="form-control" id="msg-target" onchange="toggleUserSelect()">
+                <option value="all">📢 Todos os usuários ativos</option>
+                <option value="trial">🕐 Usuários em trial</option>
+                <option value="overdue">⚠️ Inadimplentes</option>
+                <option value="specific">👤 Usuário específico</option>
+              </select>
+            </div>
+            <div class="form-group" id="msg-user-wrap" style="display:none;">
+              <label class="form-label">Selecione o usuário</label>
+              <select class="form-control" id="msg-user-sel">
+                <option value="">Carregando...</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Título</label>
+              <input type="text" class="form-control" id="msg-title" placeholder="Ex: Aviso importante"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Mensagem</label>
+              <textarea class="form-control" id="msg-body" rows="5" placeholder="Digite a mensagem..." style="resize:vertical;"></textarea>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:4px;">
+              <button class="btn btn-ghost" onclick="clearMsgForm()">Limpar</button>
+              <button class="btn btn-primary" onclick="sendMessage()">
+                <i data-lucide="send" style="width:14px;height:14px;"></i> Enviar Notificação
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Preview + histórico rápido -->
+        <div>
+          <!-- Preview -->
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-header"><span class="card-title">Preview</span></div>
+            <div class="card-body">
+              <div style="background:var(--bg3);border-radius:var(--radius-sm);border:1px solid var(--border);padding:14px 16px;">
+                <div style="display:flex;align-items:flex-start;gap:10px;">
+                  <div style="width:32px;height:32px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <i data-lucide="bell" style="width:15px;height:15px;color:#fff;"></i>
+                  </div>
+                  <div>
+                    <div style="font-size:13px;font-weight:700;margin-bottom:4px;" id="preview-title" style="color:var(--text3);">Título aparecerá aqui</div>
+                    <div style="font-size:12px;color:var(--text2);line-height:1.5;" id="preview-body">Mensagem aparecerá aqui...</div>
+                    <div style="font-size:11px;color:var(--text3);margin-top:6px;">Agora</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Info -->
+          <div class="card">
+            <div class="card-header"><span class="card-title">Como funciona</span></div>
+            <div class="card-body" style="font-size:13px;color:var(--text2);line-height:1.8;">
+              <div>🔔 A mensagem aparece no <strong>sininho</strong> do usuário</div>
+              <div>📌 Fica marcada como <strong>não lida</strong> até o usuário abrir</div>
+              <div>📢 <strong>Todos ativos</strong> envia para todos com conta ativa</div>
+              <div>🕐 <strong>Em trial</strong> envia só para quem está no período de teste</div>
+              <div>⚠️ <strong>Inadimplentes</strong> envia só para quem está com pagamento em atraso</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL USUÁRIO -->
+<div class="modal-overlay" id="user-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title" id="user-modal-title">Novo Usuário</span>
+      <button class="modal-close" onclick="closeModal()"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Nome</label>
+        <input type="text" class="form-control" id="u-name"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">E-mail</label>
+        <input type="email" class="form-control" id="u-email"/>
+      </div>
+    </div>
+    <div class="form-group" id="u-password-wrap">
+      <label class="form-label">Senha</label>
+      <input type="password" class="form-control" id="u-password" placeholder="Mín. 6 caracteres"/>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Plano</label>
+        <select class="form-control" id="u-role">
+          <option value="bronze">🥉 Bronze</option>
+          <option value="prata" selected>🥈 Prata</option>
+          <option value="ouro">🥇 Ouro</option>
+          <option value="admin">🔴 Admin</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Status da Assinatura</label>
+        <select class="form-control" id="u-plan-status">
+          <option value="trial">Trial</option>
+          <option value="active">Ativo</option>
+          <option value="overdue">Inadimplente</option>
+          <option value="cancelled">Cancelado</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Vencimento da Assinatura</label>
+        <input type="date" class="form-control" id="u-expires"/>
+      </div>
+      <div class="form-group" style="display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:2px;">
+        <label class="form-label">Usuário Ativo?</label>
+        <label class="toggle" style="margin-top:6px;">
+          <input type="checkbox" id="u-active" checked/>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+    <input type="hidden" id="u-id"/>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveUser()">
+        <i data-lucide="save" style="width:14px;height:14px;"></i> Salvar
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<script>
+const api = (url, opts={}) =>
+  fetch(url, { headers: {'Content-Type':'application/json'}, ...opts }).then(r => r.json());
+
+const fmt = v => 'R$ ' + parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
+
+function showToast(msg, type='success') {
+  const wrap = document.getElementById('toast-wrap');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<i data-lucide="${type==='success'?'check-circle':'alert-circle'}" style="width:16px;height:16px;flex-shrink:0;"></i>${msg}`;
+  wrap.appendChild(t);
+  lucide.createIcons();
+  setTimeout(() => t.remove(), 3500);
+}
+
+// ── Views ──────────────────────────────────────────
+let allUsers = [];
+
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+  const titles = { overview: 'Visão Geral', users: 'Usuários', messages: 'Enviar Mensagem' };
+  document.getElementById('topbar-title').textContent = titles[name] || name;
+  if (name === 'overview') loadOverview();
+  if (name === 'users') loadUsers();
+}
+
+// ── Overview ───────────────────────────────────────
+function loadOverview() {
+  api('/admin/api/stats').then(s => {
+    document.getElementById('stat-grid').innerHTML = [
+      { label: 'Total de Usuários', value: s.total_users, color: 'var(--accent)' },
+      { label: 'Usuários Ativos',   value: s.active_users, color: 'var(--green)' },
+      { label: 'Inativos',          value: s.inactive_users, color: 'var(--red)' },
+      { label: 'Plano Trial',       value: s.by_status.trial || 0, color: 'var(--yellow)' },
+      { label: 'Assinatura Ativa',  value: s.by_status.active || 0, color: 'var(--green)' },
+      { label: 'Inadimplentes',     value: s.by_status.overdue || 0, color: 'var(--red)' },
+    ].map(c => `
+      <div class="stat-card">
+        <div class="stat-label">${c.label}</div>
+        <div class="stat-value" style="color:${c.color};">${c.value}</div>
+      </div>`).join('');
+
+    const roleBar = (label, count, total, color) => `
+      <div style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+          <span>${label}</span><span style="font-weight:700;">${count}</span>
+        </div>
+        <div style="height:6px;background:var(--bg4);border-radius:99px;overflow:hidden;">
+          <div style="height:100%;width:${total>0?Math.round(count/total*100):0}%;background:${color};border-radius:99px;"></div>
+        </div>
+      </div>`;
+
+    document.getElementById('overview-by-role').innerHTML =
+      roleBar('🔴 Admin',  s.by_role.admin||0,  s.total_users, 'var(--red)') +
+      roleBar('🥇 Ouro',   s.by_role.ouro||0,   s.total_users, 'var(--gold)') +
+      roleBar('🥈 Prata',  s.by_role.prata||0,  s.total_users, 'var(--silver)') +
+      roleBar('🥉 Bronze', s.by_role.bronze||0, s.total_users, 'var(--bronze)');
+
+    document.getElementById('overview-by-status').innerHTML =
+      roleBar('Trial',       s.by_status.trial||0,     s.total_users, 'var(--yellow)') +
+      roleBar('Ativo',       s.by_status.active||0,    s.total_users, 'var(--green)') +
+      roleBar('Inadimplente',s.by_status.overdue||0,   s.total_users, 'var(--red)') +
+      roleBar('Cancelado',   s.by_status.cancelled||0, s.total_users, 'var(--text3)');
+  });
+}
+
+// ── Users ──────────────────────────────────────────
+function roleBadge(role) {
+  const map = {
+    admin:  ['badge-admin',  '🔴 Admin'],
+    ouro:   ['badge-gold',   '🥇 Ouro'],
+    prata:  ['badge-silver', '🥈 Prata'],
+    bronze: ['badge-bronze', '🥉 Bronze'],
+  };
+  const [cls, lbl] = map[role] || ['badge-gray', role];
+  return `<span class="badge ${cls}">${lbl}</span>`;
+}
+function statusBadge(s) {
+  const map = {
+    active:    ['badge-green',  'Ativo'],
+    trial:     ['badge-yellow', 'Trial'],
+    overdue:   ['badge-red',    'Inadimplente'],
+    cancelled: ['badge-gray',   'Cancelado'],
+  };
+  const [cls, lbl] = map[s] || ['badge-gray', s];
+  return `<span class="badge ${cls}">${lbl}</span>`;
+}
+
+function loadUsers() {
+  api('/admin/api/users').then(users => {
+    allUsers = users;
+    renderUsers(users);
+  });
+}
+
+function renderUsers(users) {
+  const tbody = document.getElementById('users-tbody');
+  if (!users.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text3);">Nenhum usuário encontrado.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = users.map(u => `
+    <tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:32px;height:32px;border-radius:50%;background:${u.is_active?'var(--accent)':'var(--bg4)'};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;">
+            ${u.name[0].toUpperCase()}
+          </div>
+          <div>
+            <div style="font-weight:600;">${escHtml(u.name)}</div>
+            <div style="font-size:12px;color:var(--text2);">${escHtml(u.email)}</div>
+          </div>
+        </div>
+      </td>
+      <td>${roleBadge(u.role)}</td>
+      <td>${statusBadge(u.plan_status)}</td>
+      <td style="font-size:12px;color:${u.plan_expires_at ? 'var(--text2)' : 'var(--text3)'};">
+        ${u.plan_expires_at ? fmtDate(u.plan_expires_at) : '—'}
+      </td>
+      <td style="font-size:12px;color:var(--text2);">${u.created_at||'—'}</td>
+      <td>
+        <label class="toggle" title="${u.is_active?'Inativar':'Ativar'} usuário" onclick="toggleActive(${u.id}, ${u.is_active})">
+          <input type="checkbox" ${u.is_active?'checked':''} readonly/>
+          <span class="toggle-slider"></span>
+        </label>
+      </td>
+      <td style="text-align:right;">
+        <button class="btn-icon" title="Editar" onclick="openUserModal(${JSON.stringify(u).replace(/"/g,'&quot;')})">
+          <i data-lucide="pencil" style="width:14px;height:14px;"></i>
+        </button>
+      </td>
+    </tr>`).join('');
+  lucide.createIcons();
+}
+
+function filterUsers() {
+  const q = document.getElementById('user-search').value.toLowerCase();
+  renderUsers(allUsers.filter(u =>
+    u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+  ));
+}
+
+function fmtDate(d) {
+  if (!d) return '—';
+  const [y,m,day] = d.split('-');
+  return `${day}/${m}/${y}`;
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Toggle ativo/inativo ────────────────────────────
+async function toggleActive(id, current) {
+  const res = await api(`/admin/api/users/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ is_active: !current }),
+  });
+  if (res.success) {
+    showToast(res.user.is_active ? 'Usuário ativado.' : 'Usuário inativado.', res.user.is_active ? 'success' : 'danger');
+    loadUsers();
+  } else showToast(res.error||'Erro.','danger');
+}
+
+// ── Modal usuário ───────────────────────────────────
+function openUserModal(u) {
+  document.getElementById('u-id').value = u?.id || '';
+  document.getElementById('user-modal-title').textContent = u ? 'Editar Usuário' : 'Novo Usuário';
+  document.getElementById('u-name').value = u?.name || '';
+  document.getElementById('u-email').value = u?.email || '';
+  document.getElementById('u-password').value = '';
+  document.getElementById('u-role').value = u?.role || 'prata';
+  document.getElementById('u-plan-status').value = u?.plan_status || 'trial';
+  document.getElementById('u-expires').value = u?.plan_expires_at || '';
+  document.getElementById('u-active').checked = u ? u.is_active : true;
+  // Senha obrigatória só na criação
+  document.getElementById('u-password-wrap').querySelector('label').textContent = u ? 'Nova Senha (deixe vazio para não alterar)' : 'Senha';
+  document.getElementById('user-modal').classList.add('open');
+  lucide.createIcons();
+}
+
+function closeModal() {
+  document.getElementById('user-modal').classList.remove('open');
+}
+
+async function saveUser() {
+  const id = document.getElementById('u-id').value;
+  const body = {
+    name:        document.getElementById('u-name').value.trim(),
+    email:       document.getElementById('u-email').value.trim(),
+    role:        document.getElementById('u-role').value,
+    plan_status: document.getElementById('u-plan-status').value,
+    plan_expires_at: document.getElementById('u-expires').value || null,
+    is_active:   document.getElementById('u-active').checked,
+  };
+  const pwd = document.getElementById('u-password').value;
+  if (pwd) body.password = pwd;
+
+  if (!body.name || !body.email) { showToast('Nome e e-mail são obrigatórios.','danger'); return; }
+  if (!id && !pwd) { showToast('Informe uma senha para o novo usuário.','danger'); return; }
+
+  const res = await api(id ? `/admin/api/users/${id}` : '/admin/api/users', {
+    method: id ? 'PUT' : 'POST',
+    body: JSON.stringify(body),
+  });
+  if (res.success) {
+    showToast('Usuário salvo com sucesso!', 'success');
+    closeModal();
+    loadUsers();
+    loadOverview();
+  } else showToast(res.error||'Erro ao salvar.','danger');
+}
+
+// ── Init ───────────────────────────────────────────
+lucide.createIcons();
+loadOverview();
+
+// ── Mensagens ──────────────────────────────────────
+function toggleUserSelect() {
+  const target = document.getElementById('msg-target').value;
+  document.getElementById('msg-user-wrap').style.display = target === 'specific' ? '' : 'none';
+}
+
+// Preview em tempo real
+document.getElementById('msg-title').addEventListener('input', function() {
+  document.getElementById('preview-title').textContent = this.value || 'Título aparecerá aqui';
+});
+document.getElementById('msg-body').addEventListener('input', function() {
+  document.getElementById('preview-body').textContent = this.value || 'Mensagem aparecerá aqui...';
+});
+
+function clearMsgForm() {
+  document.getElementById('msg-title').value = '';
+  document.getElementById('msg-body').value = '';
+  document.getElementById('msg-target').value = 'all';
+  document.getElementById('msg-user-wrap').style.display = 'none';
+  document.getElementById('preview-title').textContent = 'Título aparecerá aqui';
+  document.getElementById('preview-body').textContent = 'Mensagem aparecerá aqui...';
+}
+
+async function sendMessage() {
+  const title   = document.getElementById('msg-title').value.trim();
+  const message = document.getElementById('msg-body').value.trim();
+  const target  = document.getElementById('msg-target').value;
+
+  if (!title)   { showToast('Informe o título.', 'danger'); return; }
+  if (!message) { showToast('Informe a mensagem.', 'danger'); return; }
+
+  let user_ids = 'all';
+  if (target === 'specific') {
+    const uid = document.getElementById('msg-user-sel').value;
+    if (!uid) { showToast('Selecione um usuário.', 'danger'); return; }
+    user_ids = [parseInt(uid)];
+  } else if (target === 'trial') {
+    // Filtrar localmente os usuários em trial
+    user_ids = allUsers.filter(u => u.plan_status === 'trial' && u.is_active).map(u => u.id);
+    if (!user_ids.length) { showToast('Nenhum usuário em trial encontrado.', 'danger'); return; }
+  } else if (target === 'overdue') {
+    user_ids = allUsers.filter(u => u.plan_status === 'overdue' && u.is_active).map(u => u.id);
+    if (!user_ids.length) { showToast('Nenhum usuário inadimplente encontrado.', 'danger'); return; }
+  }
+
+  const btn = document.querySelector('[onclick="sendMessage()"]');
+  btn.disabled = true;
+
+  const res = await api('/admin/api/notify', {
+    method: 'POST',
+    body: JSON.stringify({ title, message, user_ids }),
+  });
+  btn.disabled = false;
+
+  if (res.success) {
+    const dest = res.sent_to === 1 ? '1 usuário' : `${res.sent_to} usuários`;
+    showToast(`✅ Mensagem enviada para ${dest}!`, 'success');
+    clearMsgForm();
+  } else {
+    showToast(res.error || 'Erro ao enviar.', 'danger');
+  }
+}
+
+// Preencher select de usuários quando mudar para "específico"
+document.getElementById('msg-target').addEventListener('change', async function() {
+  toggleUserSelect();
+  if (this.value === 'specific') {
+    if (!allUsers.length) await new Promise(r => { loadUsers(); setTimeout(r, 500); });
+    document.getElementById('msg-user-sel').innerHTML = allUsers
+      .filter(u => u.is_active)
+      .map(u => `<option value="${u.id}">${escHtml(u.name)} — ${escHtml(u.email)}</option>`)
+      .join('');
+  }
+});
+
+// Atualizar titles dict
+const origShowView = showView;
+</script>
+</body>
+</html>

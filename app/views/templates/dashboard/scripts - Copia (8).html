@@ -1,0 +1,1698 @@
+{% block scripts %}
+<script>
+// ═══════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════
+const state = {
+  month: new Date().getMonth() + 1,
+  year: new Date().getFullYear(),
+  accountId: '',
+  txnType: '',
+  search: '',
+  page: 1,
+  editingTxnType: 'expense',
+  deleteTxnId: null,
+  deleteTxnGroup: null,
+  categories: [],
+  accounts: [],
+  flowChart: null,
+  catChart: null,
+  catType: 'expense',
+  currentView: 'dashboard',
+};
+
+const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+// ═══════════════════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════════════════
+function api(url, opts={}) {
+  return fetch(url, {
+    headers: {'Content-Type':'application/json', 'X-Requested-With':'XMLHttpRequest'},
+    ...opts,
+  }).then(r => r.json());
+}
+
+function todayISO() {
+  return new Date().toISOString().split('T')[0];
+}
+
+function openModal(id) {
+  document.getElementById(id).classList.add('active');
+  lucide.createIcons();
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('active');
+}
+
+// Close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if(e.target === el) el.classList.remove('active'); });
+});
+
+// ═══════════════════════════════════════════════════
+//  SIDEBAR TOGGLE (mobile)
+// ═══════════════════════════════════════════════════
+document.getElementById('sidebar-toggle').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('show');
+});
+document.getElementById('sidebar-overlay').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('show');
+});
+
+// ═══════════════════════════════════════════════════
+//  NAV
+// ═══════════════════════════════════════════════════
+document.querySelectorAll('.nav-item[data-view]').forEach(item => {
+  item.addEventListener('click', () => {
+    const view = item.dataset.view;
+    showView(view);
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    item.classList.add('active');
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebar-overlay').classList.remove('show');
+  });
+});
+
+function showView(view) {
+  state.currentView = view;
+  document.querySelectorAll('[id^="view-"]').forEach(el => el.style.display = 'none');
+  document.getElementById(`view-${view}`).style.display = '';
+  if (view === 'dashboard') loadDashboard();
+  else if (view === 'transactions') renderTransactionsView();
+  else if (view === 'pending') renderPendingView();
+  else if (view === 'charts') renderChartsView();
+  else if (view === 'by-category') renderByCategoryView();
+  else if (view === 'accounts') renderAccountsView();
+  else if (view === 'categories') renderCategoriesView();
+  else if (view === 'budgets') renderBudgetsView();
+}
+
+// ═══════════════════════════════════════════════════
+//  MONTH NAV
+// ═══════════════════════════════════════════════════
+function updateMonthLabel() {
+  document.getElementById('month-label').textContent = `${MONTHS[state.month-1]} ${state.year}`;
+}
+document.getElementById('prev-month').addEventListener('click', () => {
+  state.month--;
+  if (state.month < 1) { state.month = 12; state.year--; }
+  state.page = 1;
+  updateMonthLabel();
+  loadDashboard();
+});
+document.getElementById('next-month').addEventListener('click', () => {
+  state.month++;
+  if (state.month > 12) { state.month = 1; state.year++; }
+  state.page = 1;
+  updateMonthLabel();
+  loadDashboard();
+});
+updateMonthLabel();
+
+// ═══════════════════════════════════════════════════
+//  ACCOUNT FILTER
+// ═══════════════════════════════════════════════════
+document.getElementById('account-filter').addEventListener('change', e => {
+  state.accountId = e.target.value;
+  state.page = 1;
+  loadDashboard();
+});
+
+// ═══════════════════════════════════════════════════
+//  SEARCH
+// ═══════════════════════════════════════════════════
+let searchTimeout;
+document.getElementById('search-input').addEventListener('input', e => {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    state.search = e.target.value;
+    state.page = 1;
+    loadTransactions();
+  }, 400);
+});
+
+// ═══════════════════════════════════════════════════
+//  TYPE FILTERS
+// ═══════════════════════════════════════════════════
+document.querySelectorAll('.txn-filters .filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.txn-filters .filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.txnType = btn.dataset.type;
+    state.page = 1;
+    loadTransactions();
+  });
+});
+
+// ═══════════════════════════════════════════════════
+//  LOAD DASHBOARD
+// ═══════════════════════════════════════════════════
+function loadDashboard() {
+  loadSummary();
+  loadTransactions();
+  loadFlowChart();
+  loadCatChart();
+}
+
+function loadSummary() {
+  const p = new URLSearchParams({ month: state.month, year: state.year });
+  if (state.accountId) p.append('account_id', state.accountId);
+  api(`/api/summary?${p}`).then(d => {
+    document.getElementById('stat-balance').textContent = fmt(d.balance);
+    document.getElementById('stat-income').textContent = fmt(d.monthly_income);
+    document.getElementById('stat-expense').textContent = fmt(d.monthly_expense);
+    document.getElementById('stat-overdue').textContent = fmt(d.overdue);
+    document.getElementById('stat-pending').textContent = d.pending_count;
+    const badge = document.getElementById('pending-badge');
+    if (d.pending_count > 0) { badge.textContent = d.pending_count; badge.style.display = ''; }
+    else { badge.style.display = 'none'; }
+    document.getElementById('stat-income-month').textContent = `${MONTHS[state.month-1]} ${state.year}`;
+    document.getElementById('stat-expense-month').textContent = `${MONTHS[state.month-1]} ${state.year}`;
+  });
+}
+
+function loadTransactions() {
+  const tbody = document.getElementById('txn-tbody');
+  tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="spinner" style="margin:0 auto;"></div></div></td></tr>`;
+  const p = new URLSearchParams({ month: state.month, year: state.year, page: state.page, per_page: 20 });
+  if (state.accountId) p.append('account_id', state.accountId);
+  if (state.txnType)   p.append('type', state.txnType);
+  if (state.search)    p.append('search', state.search);
+  api(`/api/transactions?${p}`).then(d => {
+    renderTransactionRows(d, tbody);
+    renderPagination(d);
+  });
+}
+
+function renderTransactionRows(d, tbody) {
+  if (!d.transactions || d.transactions.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">
+      <div class="empty-icon"><i data-lucide="inbox" style="width:24px;height:24px;"></i></div>
+      <div class="empty-title">Nenhum lançamento</div>
+      <div class="empty-sub">Clique em "Novo Lançamento" para começar.</div>
+    </div></td></tr>`;
+    lucide.createIcons();
+    return;
+  }
+  tbody.innerHTML = d.transactions.map(t => `
+    <tr data-id="${t.id}">
+      <td style="white-space:nowrap;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text2);">${t.date}</td>
+      <td>
+        <div class="txn-desc">${escHtml(t.description)}</div>
+        ${t.installment_number ? `<div style="font-size:11px;color:var(--text3);">${t.installment_number}/${t.total_installments}x</div>` : ''}
+      </td>
+      <td>
+        <div class="txn-cat">
+          <div class="cat-dot" style="background:${t.category_color}"></div>
+          <span style="font-size:12px;color:var(--text2);">${escHtml(t.category_name)}</span>
+        </div>
+      </td>
+      <td style="font-size:12px;color:var(--text2);">${escHtml(t.account_name)}</td>
+      <td style="text-align:right">
+        <span class="txn-amount ${t.type}">${t.type === 'expense' ? '-' : '+'}${fmt(t.amount)}</span>
+      </td>
+      <td style="text-align:center">
+        ${t.paid
+          ? `<span class="badge badge-green" style="cursor:pointer;" onclick="togglePaid(${t.id}, false)" title="Clique para desfazer">✓ Pago</span>`
+          : `<span class="badge badge-yellow" style="cursor:pointer;" onclick="openPayModal(${t.id})" title="Marcar como pago">Pendente</span>`}
+      </td>
+      <td>
+        <div class="txn-actions">
+          <button class="btn-icon btn-sm" onclick="editTransaction(${t.id})" title="Editar">
+            <i data-lucide="pencil" style="width:13px;height:13px;"></i>
+          </button>
+          <button class="btn-icon btn-sm" style="color:var(--red);" onclick="confirmDelete(${t.id},'${escHtml(t.description)}','${t.recurrence_group||''}')" title="Excluir">
+            <i data-lucide="trash-2" style="width:13px;height:13px;"></i>
+          </button>
+        </div>
+      </td>
+    </tr>`).join('');
+  lucide.createIcons();
+  document.getElementById('txn-count').textContent = `${d.total} lançamento(s)`;
+}
+
+function renderPagination(d) {
+  const wrap = document.getElementById('page-btns');
+  wrap.innerHTML = '';
+  for (let i = 1; i <= d.pages; i++) {
+    const btn = document.createElement('button');
+    btn.className = `page-btn${i === d.current_page ? ' active' : ''}`;
+    btn.textContent = i;
+    btn.onclick = () => { state.page = i; loadTransactions(); };
+    wrap.appendChild(btn);
+  }
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ═══════════════════════════════════════════════════
+//  CHARTS
+// ═══════════════════════════════════════════════════
+function loadFlowChart() {
+  const year = document.getElementById('chart-year-select').value;
+  const p = new URLSearchParams({ year });
+  if (state.accountId) p.append('account_id', state.accountId);
+  api(`/api/chart/monthly?${p}`).then(data => {
+    const ctx = document.getElementById('flow-chart').getContext('2d');
+    if (state.flowChart) state.flowChart.destroy();
+    state.flowChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: data.map(d => d.month),
+        datasets: [
+          { label: 'Receitas', data: data.map(d => d.income), backgroundColor: 'rgba(34,197,94,0.7)', borderRadius: 4 },
+          { label: 'Despesas', data: data.map(d => d.expense), backgroundColor: 'rgba(244,63,94,0.7)', borderRadius: 4 },
+        ],
+      },
+      options: {
+        responsive: true, plugins: { legend: { labels: { color: '#9097b0', font: { family: 'Sora' } } } },
+        scales: {
+          x: { ticks: { color: '#9097b0' }, grid: { color: '#2a2f3f' } },
+          y: { ticks: { color: '#9097b0', callback: v => 'R$' + v.toLocaleString('pt-BR') }, grid: { color: '#2a2f3f' } },
+        },
+      },
+    });
+  });
+}
+
+document.getElementById('chart-year-select').addEventListener('change', loadFlowChart);
+
+function loadCatChart() {
+  const p = new URLSearchParams({ month: state.month, year: state.year, type: state.catType });
+  api(`/api/chart/categories?${p}`).then(data => {
+    const ctx = document.getElementById('cat-chart').getContext('2d');
+    if (state.catChart) state.catChart.destroy();
+    if (!data.length) {
+      document.getElementById('cat-legend').innerHTML = `<div style="text-align:center;color:var(--text3);font-size:12px;">Sem dados</div>`;
+      return;
+    }
+    state.catChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: data.map(d => d.name),
+        datasets: [{ data: data.map(d => d.total), backgroundColor: data.map(d => d.color), borderWidth: 2, borderColor: '#13161e' }],
+      },
+      options: {
+        cutout: '68%', plugins: { legend: { display: false } },
+        responsive: false,
+      },
+    });
+    const total = data.reduce((a,b) => a + b.total, 0);
+    document.getElementById('cat-legend').innerHTML = data.map(d => `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-size:12px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:10px;height:10px;border-radius:50%;background:${d.color};flex-shrink:0;"></div>
+          <span style="color:var(--text2);">${escHtml(d.name)}</span>
+        </div>
+        <span style="font-weight:600;">${total > 0 ? Math.round(d.total/total*100) : 0}%</span>
+      </div>`).join('');
+  });
+}
+
+document.getElementById('cat-type-expense').addEventListener('click', () => {
+  state.catType = 'expense';
+  document.getElementById('cat-type-expense').classList.add('active');
+  document.getElementById('cat-type-income').classList.remove('active');
+  loadCatChart();
+});
+document.getElementById('cat-type-income').addEventListener('click', () => {
+  state.catType = 'income';
+  document.getElementById('cat-type-income').classList.add('active');
+  document.getElementById('cat-type-expense').classList.remove('active');
+  loadCatChart();
+});
+
+// ═══════════════════════════════════════════════════
+//  TRANSACTION MODAL
+// ═══════════════════════════════════════════════════
+function loadCategories() {
+  return api('/categories/').then(cats => {
+    state.categories = cats;
+    const sel = document.getElementById('txn-category');
+    sel.innerHTML = '<option value="">Sem categoria</option>' +
+      cats.map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('');
+  });
+}
+loadCategories();
+
+document.getElementById('new-txn-btn').addEventListener('click', () => {
+  document.getElementById('txn-id').value = '';
+  document.getElementById('txn-modal-title').textContent = 'Novo Lançamento';
+  document.getElementById('txn-form').reset();
+  document.getElementById('txn-date').value = todayISO();
+  document.getElementById('txn-paid-at').value = todayISO();
+  document.getElementById('recurrence-section').style.display = '';
+  setTxnType('expense');
+  openModal('txn-modal');
+});
+
+function setTxnType(type) {
+  state.editingTxnType = type;
+  document.getElementById('tab-expense').classList.toggle('active', type === 'expense');
+  document.getElementById('tab-income').classList.toggle('active', type === 'income');
+}
+
+document.getElementById('txn-recurrence').addEventListener('change', e => {
+  document.getElementById('recurrence-times-wrap').style.display = e.target.value !== '0' ? '' : 'none';
+});
+
+document.getElementById('txn-paid').addEventListener('change', e => {
+  document.getElementById('txn-paid-at').style.display = e.target.checked ? '' : 'none';
+});
+
+document.getElementById('txn-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const id = document.getElementById('txn-id').value;
+  const body = {
+    type: state.editingTxnType,
+    description: document.getElementById('txn-desc').value,
+    amount: parseFloat(document.getElementById('txn-amount').value),
+    date: document.getElementById('txn-date').value,
+    paid: document.getElementById('txn-paid').checked,
+    paid_at: document.getElementById('txn-paid-at').value,
+    category_id: document.getElementById('txn-category').value || null,
+    account_id: document.getElementById('txn-account').value,
+    notes: document.getElementById('txn-notes').value,
+  };
+  if (!id) {
+    body.recurrence = parseInt(document.getElementById('txn-recurrence').value);
+    body.recurrence_times = body.recurrence ? parseInt(document.getElementById('txn-recurrence-times').value) : 1;
+  }
+  const btn = document.getElementById('txn-save-btn');
+  btn.disabled = true;
+  const res = await api(id ? `/transactions/${id}` : '/transactions/create', {
+    method: id ? 'PUT' : 'POST', body: JSON.stringify(body),
+  });
+  btn.disabled = false;
+  if (res.success) {
+    showToast(id ? 'Lançamento atualizado!' : 'Lançamento criado!', 'success');
+    closeModal('txn-modal');
+    loadDashboard();
+  } else {
+    showToast(res.error || 'Erro ao salvar.', 'danger');
+  }
+});
+
+async function editTransaction(id) {
+  const t = await api(`/transactions/${id}`);
+  document.getElementById('txn-id').value = t.id;
+  document.getElementById('txn-modal-title').textContent = 'Editar Lançamento';
+  document.getElementById('txn-desc').value = t.description;
+  document.getElementById('txn-amount').value = t.amount;
+  document.getElementById('txn-date').value = t.date.split('/').reverse().join('-');
+  document.getElementById('txn-category').value = t.category_id || '';
+  document.getElementById('txn-account').value = t.account_id;
+  document.getElementById('txn-paid').checked = t.paid;
+  document.getElementById('txn-paid-at').value = t.paid_at ? t.paid_at.split('/').reverse().join('-') : todayISO();
+  document.getElementById('txn-paid-at').style.display = t.paid ? '' : 'none';
+  document.getElementById('txn-notes').value = t.notes || '';
+  document.getElementById('recurrence-section').style.display = 'none';
+  setTxnType(t.type);
+  openModal('txn-modal');
+}
+
+// ═══════════════════════════════════════════════════
+//  PAY MODAL
+// ═══════════════════════════════════════════════════
+function openPayModal(id) {
+  document.getElementById('pay-txn-id').value = id;
+  document.getElementById('pay-date').value = todayISO();
+  openModal('pay-modal');
+}
+document.getElementById('pay-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const id = document.getElementById('pay-txn-id').value;
+  const paid_at = document.getElementById('pay-date').value;
+  const res = await api(`/transactions/${id}/pay`, { method: 'POST', body: JSON.stringify({ paid_at }) });
+  if (res.success) { showToast('Marcado como pago!', 'success'); closeModal('pay-modal'); loadDashboard(); }
+});
+
+async function togglePaid(id, paid) {
+  const url = paid ? `/transactions/${id}/pay` : `/transactions/${id}/unpay`;
+  const res = await api(url, { method: 'POST', body: JSON.stringify({}) });
+  if (res.success) { loadDashboard(); }
+}
+
+// ═══════════════════════════════════════════════════
+//  DELETE
+// ═══════════════════════════════════════════════════
+function confirmDelete(id, desc, group) {
+  state.deleteTxnId = id;
+  state.deleteTxnGroup = group;
+  document.getElementById('delete-desc').textContent = desc;
+  const groupSection = document.getElementById('delete-group-section');
+  const groupBtn = document.getElementById('delete-group-btn');
+  if (group) { groupSection.style.display = ''; groupBtn.style.display = ''; }
+  else       { groupSection.style.display = 'none'; groupBtn.style.display = 'none'; }
+  openModal('delete-modal');
+}
+
+document.getElementById('delete-single-btn').addEventListener('click', async () => {
+  const res = await api(`/transactions/${state.deleteTxnId}`, { method: 'DELETE' });
+  if (res.success) { showToast('Lançamento excluído!', 'success'); closeModal('delete-modal'); loadDashboard(); }
+});
+document.getElementById('delete-group-btn').addEventListener('click', async () => {
+  const res = await api(`/transactions/${state.deleteTxnId}?group=true`, { method: 'DELETE' });
+  if (res.success) { showToast('Grupo excluído!', 'success'); closeModal('delete-modal'); loadDashboard(); }
+});
+
+// ═══════════════════════════════════════════════════
+//  ADJUST BALANCE
+// ═══════════════════════════════════════════════════
+document.getElementById('adjust-balance-btn').addEventListener('click', () => {
+  openModal('balance-modal');
+});
+document.getElementById('balance-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const id = document.getElementById('balance-account-select').value;
+  const balance = parseFloat(document.getElementById('balance-value').value);
+  const res = await api(`/accounts/${id}/balance`, { method: 'PUT', body: JSON.stringify({ balance }) });
+  if (res.success) { showToast('Saldo ajustado!', 'success'); closeModal('balance-modal'); loadDashboard(); }
+});
+
+// ═══════════════════════════════════════════════════
+//  TRANSFER
+// ═══════════════════════════════════════════════════
+document.getElementById('transfer-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const res = await api('/transactions/transfer', {
+    method: 'POST',
+    body: JSON.stringify({
+      from_account_id: document.getElementById('transfer-from').value,
+      to_account_id: document.getElementById('transfer-to').value,
+      date: document.getElementById('transfer-date').value,
+      amount: parseFloat(document.getElementById('transfer-amount').value),
+    }),
+  });
+  if (res.success) { showToast('Transferência realizada!', 'success'); closeModal('transfer-modal'); loadDashboard(); }
+  else showToast(res.error || 'Erro na transferência.', 'danger');
+});
+
+// ═══════════════════════════════════════════════════
+//  NOTIFICATIONS
+// ═══════════════════════════════════════════════════
+document.getElementById('notif-btn').addEventListener('click', () => {
+  const panel = document.getElementById('notif-panel');
+  panel.classList.toggle('open');
+  if (panel.classList.contains('open')) loadNotifications();
+});
+document.addEventListener('click', e => {
+  if (!document.getElementById('notif-dropdown-wrap').contains(e.target))
+    document.getElementById('notif-panel').classList.remove('open');
+});
+
+function loadNotifications() {
+  api('/api/notifications').then(d => {
+    document.getElementById('notif-dot').classList.toggle('show', d.unread > 0);
+    document.getElementById('notif-list').innerHTML = d.notifications.length
+      ? d.notifications.map(n => `
+          <div class="notif-item ${n.read ? '' : 'unread'}">
+            <div class="notif-item-title">${escHtml(n.title)}</div>
+            <div class="notif-item-msg">${escHtml(n.message)}</div>
+            <div class="notif-item-time">${n.created_at}</div>
+          </div>`).join('')
+      : `<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px;">Sem notificações</div>`;
+  });
+}
+document.getElementById('mark-read-btn').addEventListener('click', () => {
+  api('/api/notifications/read', { method: 'POST', body: '{}' }).then(() => loadNotifications());
+});
+
+// Load initial notif dot
+loadNotifications();
+
+// ═══════════════════════════════════════════════════
+//  USER DROPDOWN
+// ═══════════════════════════════════════════════════
+document.getElementById('user-dropdown-btn').addEventListener('click', () => {
+  document.getElementById('user-dropdown').classList.toggle('open');
+});
+document.addEventListener('click', e => {
+  if (!document.getElementById('user-dropdown-btn').closest('.dropdown').contains(e.target))
+    document.getElementById('user-dropdown').classList.remove('open');
+});
+
+// ═══════════════════════════════════════════════════
+//  OTHER VIEWS (rendered dynamically)
+// ═══════════════════════════════════════════════════
+function renderTransactionsView() {
+  // Full transaction list with all months
+  document.getElementById('view-transactions').innerHTML = `
+    <div class="page-hdr">
+      <div class="page-hdr-left"><h2>Todos os Lançamentos</h2><p>Histórico completo</p></div>
+      <div class="page-hdr-right">
+        <button class="btn btn-ghost btn-sm" onclick="openModal('transfer-modal')"><i data-lucide="arrow-left-right" style="width:14px;height:14px;"></i> Transferência</button>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('new-txn-btn').click()"><i data-lucide="plus" style="width:14px;height:14px;"></i> Novo</button>
+      </div>
+    </div>
+    <div class="txn-card">
+      <div class="txn-header" style="flex-wrap:wrap;gap:10px;">
+        <input type="text" class="form-control" id="all-txn-search" placeholder="Buscar..." style="max-width:250px;" value="${escHtml(state.search)}"/>
+        <div class="txn-filters">
+          <button class="filter-btn ${!state.txnType?'active':''}" data-type="">Todos</button>
+          <button class="filter-btn income ${state.txnType==='income'?'active':''}" data-type="income">Receitas</button>
+          <button class="filter-btn expense ${state.txnType==='expense'?'active':''}" data-type="expense">Despesas</button>
+        </div>
+        <div class="month-nav">
+          <button class="month-nav-btn" id="prev-month2"><i data-lucide="chevron-left" style="width:16px;height:16px;"></i></button>
+          <span id="month-label2">${MONTHS[state.month-1]} ${state.year}</span>
+          <button class="month-nav-btn" id="next-month2"><i data-lucide="chevron-right" style="width:16px;height:16px;"></i></button>
+        </div>
+      </div>
+      <div class="txn-table-wrap">
+        <table class="txn-table">
+          <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Conta</th><th style="text-align:right">Valor</th><th style="text-align:center">Status</th><th style="text-align:center">Ações</th></tr></thead>
+          <tbody id="all-txn-tbody"></tbody>
+        </table>
+      </div>
+      <div class="txn-pagination"><span id="all-txn-count">—</span><div class="page-btns" id="all-page-btns"></div></div>
+    </div>`;
+  lucide.createIcons();
+
+  document.getElementById('prev-month2').onclick = () => {
+    state.month--; if(state.month<1){state.month=12;state.year--;} state.page=1;
+    document.getElementById('month-label2').textContent = `${MONTHS[state.month-1]} ${state.year}`;
+    loadAllTxn();
+  };
+  document.getElementById('next-month2').onclick = () => {
+    state.month++; if(state.month>12){state.month=1;state.year++;} state.page=1;
+    document.getElementById('month-label2').textContent = `${MONTHS[state.month-1]} ${state.year}`;
+    loadAllTxn();
+  };
+  document.querySelectorAll('#view-transactions .filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#view-transactions .filter-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active'); state.txnType = btn.dataset.type; state.page=1; loadAllTxn();
+    });
+  });
+  let st2; document.getElementById('all-txn-search').addEventListener('input', e => {
+    clearTimeout(st2); st2 = setTimeout(() => { state.search = e.target.value; state.page=1; loadAllTxn(); }, 400);
+  });
+  loadAllTxn();
+}
+
+function loadAllTxn() {
+  const tbody = document.getElementById('all-txn-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="7"><div style="text-align:center;padding:20px;"><div class="spinner" style="margin:0 auto;"></div></div></td></tr>`;
+  const p = new URLSearchParams({ month: state.month, year: state.year, page: state.page, per_page: 25 });
+  if (state.txnType) p.append('type', state.txnType);
+  if (state.search) p.append('search', state.search);
+  api(`/api/transactions?${p}`).then(d => {
+    renderTransactionRows(d, tbody);
+    const wrap = document.getElementById('all-page-btns');
+    const cnt = document.getElementById('all-txn-count');
+    if (!wrap || !cnt) return;
+    cnt.textContent = `${d.total} lançamento(s)`;
+    wrap.innerHTML = '';
+    for (let i=1;i<=d.pages;i++){
+      const btn=document.createElement('button'); btn.className=`page-btn${i===d.current_page?' active':''}`; btn.textContent=i;
+      btn.onclick=()=>{state.page=i;loadAllTxn();}; wrap.appendChild(btn);
+    }
+  });
+}
+
+function renderPendingView() {
+  const el = document.getElementById('view-pending');
+  el.innerHTML = `<div class="page-hdr"><div class="page-hdr-left"><h2>Pendências</h2><p>Lançamentos em aberto e atrasados</p></div></div>
+    <div class="txn-card" style="margin-bottom:20px;">
+      <div class="txn-header"><span class="card-title" style="color:var(--red);">⚠ Vencidos / Atrasados</span></div>
+      <div class="txn-table-wrap"><table class="txn-table"><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th style="text-align:right">Valor</th><th style="text-align:center">Ações</th></tr></thead><tbody id="overdue-tbody"></tbody></table></div>
+    </div>
+    <div class="txn-card">
+      <div class="txn-header"><span class="card-title">🗓 Próximos Vencimentos</span></div>
+      <div class="txn-table-wrap"><table class="txn-table"><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th style="text-align:right">Valor</th><th style="text-align:center">Ações</th></tr></thead><tbody id="upcoming-tbody"></tbody></table></div>
+    </div>`;
+
+  api('/reports/pending').then(d => {
+    const renderSimple = (list, tbodyId) => {
+      const tbody = document.getElementById(tbodyId);
+      if (!list.length) { tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="empty-title">Nada aqui!</div></div></td></tr>`; return; }
+      tbody.innerHTML = list.map(t => `<tr>
+        <td style="font-family:'JetBrains Mono',monospace;font-size:12px;">${t.date}</td>
+        <td><div class="txn-desc">${escHtml(t.description)}</div></td>
+        <td><div class="txn-cat"><div class="cat-dot" style="background:${t.category_color}"></div><span style="font-size:12px;color:var(--text2);">${escHtml(t.category_name)}</span></div></td>
+        <td style="text-align:right"><span class="txn-amount ${t.type}">${fmt(t.amount)}</span></td>
+        <td><div class="txn-actions" style="justify-content:center;">
+          <button class="btn-icon btn-sm" onclick="openPayModal(${t.id})" title="Pagar" style="color:var(--green)"><i data-lucide="check" style="width:13px;height:13px;"></i></button>
+          <button class="btn-icon btn-sm" onclick="editTransaction(${t.id})" title="Editar"><i data-lucide="pencil" style="width:13px;height:13px;"></i></button>
+        </div></td>
+      </tr>`).join('');
+      lucide.createIcons();
+    };
+    renderSimple(d.overdue, 'overdue-tbody');
+    renderSimple(d.upcoming, 'upcoming-tbody');
+  });
+}
+
+function renderChartsView() {
+  const el = document.getElementById('view-charts');
+  const MONTH_NAMES_SHORT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const MONTH_NAMES_FULL  = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const curYear = new Date().getFullYear();
+  let chartFilteredMonth = null; // null = todos, 1-12 = filtrado
+  let barChartInstance = null;
+  let lineChartInstance = null;
+  let allMonthlyData = [];
+
+  el.innerHTML = `
+    <div class="page-hdr">
+      <div class="page-hdr-left"><h2>Análises</h2><p>Fluxo de caixa anual</p></div>
+      <div class="page-hdr-right">
+        <select class="account-select" id="charts-year">
+          <option value="${curYear-1}">${curYear-1}</option>
+          <option value="${curYear}" selected>${curYear}</option>
+          <option value="${curYear+1}">${curYear+1}</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Gráfico de linha -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header"><span class="card-title">Evolução Mensal — Receitas vs Despesas</span></div>
+      <div class="card-body"><canvas id="charts-line-canvas" height="90"></canvas></div>
+    </div>
+
+    <!-- Gráfico de barras clicável -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header">
+        <span class="card-title">Receita e Despesa por Mês</span>
+        <span id="charts-filter-label" style="font-size:12px;color:var(--accent);display:none;">
+          <i data-lucide="filter" style="width:12px;height:12px;"></i> Filtrado — clique na barra para remover
+        </span>
+      </div>
+      <div class="card-body"><canvas id="charts-bar-canvas" height="90" style="cursor:pointer;"></canvas></div>
+    </div>
+
+    <!-- Tabela de receitas e despesas -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title" id="charts-table-title">Lançamentos — Todos os meses</span>
+        <div style="display:flex;gap:6px;">
+          <button class="filter-btn active" id="ct-all"  data-type="">Todos</button>
+          <button class="filter-btn income"  id="ct-inc" data-type="income">Receitas</button>
+          <button class="filter-btn expense" id="ct-exp" data-type="expense">Despesas</button>
+        </div>
+      </div>
+      <div class="txn-table-wrap">
+        <table class="txn-table">
+          <thead><tr>
+            <th>Data</th><th>Descrição</th><th>Categoria</th><th>Conta</th>
+            <th style="text-align:right">Valor</th><th style="text-align:center">Status</th>
+          </tr></thead>
+          <tbody id="charts-txn-tbody"></tbody>
+        </table>
+      </div>
+      <div class="txn-pagination">
+        <span id="charts-txn-count">—</span>
+        <div class="page-btns" id="charts-page-btns"></div>
+      </div>
+    </div>`;
+
+  lucide.createIcons();
+
+  let tableType = '';
+  let tablePage = 1;
+
+  // Filtros da tabela
+  document.querySelectorAll('#view-charts .filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#view-charts .filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      tableType = btn.dataset.type;
+      tablePage = 1;
+      loadTable();
+    });
+  });
+
+  function loadTable() {
+    const year = document.getElementById('charts-year').value;
+    const tbody = document.getElementById('charts-txn-tbody');
+    const title = document.getElementById('charts-table-title');
+    tbody.innerHTML = `<tr><td colspan="6"><div style="text-align:center;padding:20px;"><div class="spinner" style="margin:0 auto;"></div></div></td></tr>`;
+
+    const p = new URLSearchParams({ year, page: tablePage, per_page: 20 });
+    if (chartFilteredMonth) p.set('month', chartFilteredMonth);
+    if (tableType) p.set('type', tableType);
+
+    title.textContent = chartFilteredMonth
+      ? `Lançamentos — ${MONTH_NAMES_FULL[chartFilteredMonth-1]} ${year}`
+      : `Lançamentos — Todos os meses de ${year}`;
+
+    api(`/api/transactions?${p}`).then(d => {
+      if (!d.transactions || !d.transactions.length) {
+        tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">
+          <div class="empty-icon"><i data-lucide="inbox" style="width:24px;height:24px;"></i></div>
+          <div class="empty-title">Nenhum lançamento</div>
+        </div></td></tr>`; lucide.createIcons(); return;
+      }
+      tbody.innerHTML = d.transactions.map(t => `
+        <tr>
+          <td style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text2);">${t.date}</td>
+          <td><span style="font-weight:500;">${escHtml(t.description)}</span></td>
+          <td><div style="display:flex;align-items:center;gap:6px;">
+            <div style="width:8px;height:8px;border-radius:50%;background:${t.category_color};flex-shrink:0;"></div>
+            <span style="font-size:12px;color:var(--text2);">${escHtml(t.category_name)}</span>
+          </div></td>
+          <td style="font-size:12px;color:var(--text2);">${escHtml(t.account_name)}</td>
+          <td style="text-align:right;font-family:'JetBrains Mono',monospace;font-weight:600;" class="txn-amount ${t.type}">
+            ${t.type === 'income' ? '+' : '-'}${fmt(t.amount)}
+          </td>
+          <td style="text-align:center;">
+            ${t.paid
+              ? '<span class="badge badge-green">Pago</span>'
+              : '<span class="badge badge-yellow">Pendente</span>'}
+          </td>
+        </tr>`).join('');
+      lucide.createIcons();
+
+      // Paginação
+      const cnt = document.getElementById('charts-txn-count');
+      const pgBtns = document.getElementById('charts-page-btns');
+      cnt.textContent = `${d.total} lançamento(s)`;
+      pgBtns.innerHTML = '';
+      for (let i = 1; i <= d.pages; i++) {
+        const btn = document.createElement('button');
+        btn.className = `page-btn${i === d.current_page ? ' active' : ''}`;
+        btn.textContent = i;
+        btn.onclick = () => { tablePage = i; loadTable(); };
+        pgBtns.appendChild(btn);
+      }
+    });
+  }
+
+  function buildBarChart(data) {
+    const ctx = document.getElementById('charts-bar-canvas')?.getContext('2d');
+    if (!ctx) return;
+    if (barChartInstance) barChartInstance.destroy();
+
+    const incomeBg  = data.map((_, i) => chartFilteredMonth && (i+1) === chartFilteredMonth ? 'rgba(34,197,94,1)'   : 'rgba(34,197,94,0.5)');
+    const expenseBg = data.map((_, i) => chartFilteredMonth && (i+1) === chartFilteredMonth ? 'rgba(244,63,94,1)'   : 'rgba(244,63,94,0.5)');
+    const xColor    = (ctx2) => chartFilteredMonth && (ctx2.index+1) === chartFilteredMonth ? '#fff' : '#9097b0';
+
+    barChartInstance = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: MONTH_NAMES_SHORT,
+        datasets: [
+          { label: 'Receitas',  data: data.map(d=>d.income),  backgroundColor: incomeBg,  borderColor: '#22c55e', borderWidth: 2, borderRadius: 4 },
+          { label: 'Despesas', data: data.map(d=>d.expense), backgroundColor: expenseBg, borderColor: '#f43f5e', borderWidth: 2, borderRadius: 4 },
+        ],
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { labels: { color: '#9097b0' } },
+          tooltip: { callbacks: { footer: (items) => {
+            const i = items[0]?.dataIndex;
+            const active = chartFilteredMonth && (i+1) === chartFilteredMonth;
+            return active ? '✓ Clique para remover filtro' : 'Clique para filtrar tabela';
+          }}}
+        },
+        scales: {
+          x: { ticks: { color: xColor }, grid: { color: '#2a2f3f' } },
+          y: { ticks: { color: '#9097b0', callback: v => 'R$'+v.toLocaleString('pt-BR') }, grid: { color: '#2a2f3f' } },
+        },
+        onClick: (evt, elements) => {
+          if (!elements.length) return;
+          const idx = elements[0].index;
+          const clicked = idx + 1;
+          if (chartFilteredMonth === clicked) {
+            chartFilteredMonth = null;
+            document.getElementById('charts-filter-label').style.display = 'none';
+          } else {
+            chartFilteredMonth = clicked;
+            document.getElementById('charts-filter-label').style.display = '';
+            lucide.createIcons();
+          }
+          tablePage = 1;
+          buildBarChart(allMonthlyData); // redesenha com highlight
+          loadTable();
+        },
+      },
+    });
+  }
+
+  function loadCharts() {
+    const year = document.getElementById('charts-year').value;
+    chartFilteredMonth = null;
+    document.getElementById('charts-filter-label').style.display = 'none';
+    tablePage = 1;
+
+    api(`/api/chart/monthly?year=${year}`).then(data => {
+      allMonthlyData = data;
+
+      // Gráfico de linha
+      const ctxL = document.getElementById('charts-line-canvas')?.getContext('2d');
+      if (ctxL) {
+        if (lineChartInstance) lineChartInstance.destroy();
+        lineChartInstance = new Chart(ctxL, {
+          type: 'line',
+          data: { labels: MONTH_NAMES_SHORT, datasets: [
+            { label:'Receitas', data:data.map(d=>d.income), borderColor:'#22c55e', backgroundColor:'rgba(34,197,94,0.1)', fill:true, tension:.4, pointRadius:4, pointHoverRadius:6 },
+            { label:'Despesas', data:data.map(d=>d.expense), borderColor:'#f43f5e', backgroundColor:'rgba(244,63,94,0.1)', fill:true, tension:.4, pointRadius:4, pointHoverRadius:6 },
+          ]},
+          options: { responsive:true, plugins:{legend:{labels:{color:'#9097b0'}}},
+            scales:{x:{ticks:{color:'#9097b0'},grid:{color:'#2a2f3f'}},y:{ticks:{color:'#9097b0',callback:v=>'R$'+v.toLocaleString('pt-BR')},grid:{color:'#2a2f3f'}}} },
+        });
+      }
+
+      // Gráfico de barras
+      buildBarChart(data);
+
+      // Tabela
+      loadTable();
+    });
+  }
+
+  loadCharts();
+  document.getElementById('charts-year').addEventListener('change', loadCharts);
+}
+
+function renderByCategoryView() {
+  const el = document.getElementById('view-by-category');
+  const MONTH_SHORT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const MONTH_FULL  = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const curYear = new Date().getFullYear();
+
+  let filteredMonth = null;
+  let filteredYear  = curYear;
+  let viewType      = 'expense';
+  let stackedChart  = null;
+  let annualData    = [];
+
+  el.innerHTML = `
+    <div class="page-hdr">
+      <div class="page-hdr-left"><h2>Por Categoria</h2><p>Distribuição de gastos e receitas por categoria</p></div>
+      <div class="page-hdr-right">
+        <div style="display:flex;gap:6px;">
+          <button class="filter-btn expense active" id="catv-expense">Despesas</button>
+          <button class="filter-btn income"         id="catv-income">Receitas</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gráfico anual empilhado por categoria -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span class="card-title" id="catv-chart-title">Despesas por Categoria — ${curYear}</span>
+          <span id="catv-filter-label" style="font-size:12px;color:var(--accent);display:none;">
+            <i data-lucide="filter" style="width:12px;height:12px;"></i> Clique na barra para remover o filtro
+          </span>
+        </div>
+        <select class="account-select" id="catv-year-sel" style="font-size:13px;padding:6px 10px;">
+          ${[curYear-1,curYear,curYear+1].map(y=>`<option value="${y}" ${y===curYear?'selected':''}>${y}</option>`).join('')}
+        </select>
+      </div>
+      <div class="card-body"><canvas id="catv-stacked-chart" height="100" style="cursor:pointer;"></canvas></div>
+    </div>
+
+    <!-- Detalhe por categoria do mês/ano selecionado -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title" id="catv-detail-title">Todas as categorias — ${curYear}</span>
+      </div>
+      <div id="catv-detail-body" style="padding:16px;">
+        <div style="text-align:center;padding:20px;"><div class="spinner" style="margin:0 auto;"></div></div>
+      </div>
+    </div>`;
+
+  lucide.createIcons();
+
+  // ── Filtro de tipo ──────────────────────────────────
+  document.getElementById('catv-expense').onclick = () => {
+    viewType = 'expense';
+    document.getElementById('catv-expense').classList.add('active');
+    document.getElementById('catv-income').classList.remove('active');
+    filteredMonth = null;
+    document.getElementById('catv-filter-label').style.display = 'none';
+    loadAll();
+  };
+  document.getElementById('catv-income').onclick = () => {
+    viewType = 'income';
+    document.getElementById('catv-income').classList.add('active');
+    document.getElementById('catv-expense').classList.remove('active');
+    filteredMonth = null;
+    document.getElementById('catv-filter-label').style.display = 'none';
+    loadAll();
+  };
+
+  // ── Troca de ano ────────────────────────────────────
+  document.getElementById('catv-year-sel').onchange = () => {
+    filteredMonth = null;
+    document.getElementById('catv-filter-label').style.display = 'none';
+    loadAll();
+  };
+
+  // ── Atualiza títulos ────────────────────────────────
+  function updateTitles() {
+    const typeLabel = viewType === 'expense' ? 'Despesas' : 'Receitas';
+    const periodLabel = filteredMonth
+      ? `${MONTH_FULL[filteredMonth-1]} ${filteredYear}`
+      : `Ano ${filteredYear}`;
+    document.getElementById('catv-chart-title').textContent  = `${typeLabel} por Categoria — ${filteredYear}`;
+    document.getElementById('catv-detail-title').textContent = `${typeLabel} por Categoria — ${periodLabel}`;
+  }
+
+  // ── Gráfico empilhado ───────────────────────────────
+  function buildStackedChart(data) {
+    const ctx = document.getElementById('catv-stacked-chart')?.getContext('2d');
+    if (!ctx) return;
+    if (stackedChart) stackedChart.destroy();
+
+    // Highlight do mês selecionado nos labels do eixo X
+    const xTickColor = (c) => filteredMonth && (c.index + 1) === filteredMonth ? '#fff' : '#9097b0';
+
+    const datasets = data.map(cat => ({
+      label: cat.name,
+      data:  cat.monthly,
+      backgroundColor: filteredMonth
+        ? cat.monthly.map((_, i) => (i+1) === filteredMonth ? cat.color : cat.color + '44')
+        : cat.color + 'cc',
+      borderColor: cat.color,
+      borderWidth: filteredMonth ? cat.monthly.map((_, i) => (i+1) === filteredMonth ? 2 : 0) : 0,
+      borderRadius: 3,
+    }));
+
+    stackedChart = new Chart(ctx, {
+      type: 'bar',
+      data: { labels: MONTH_SHORT, datasets },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            labels: { color: '#9097b0', boxWidth: 12, padding: 16 },
+            position: 'bottom',
+          },
+          tooltip: {
+            callbacks: {
+              footer: (items) => {
+                const i = items[0]?.dataIndex;
+                return filteredMonth && (i+1) === filteredMonth
+                  ? '✓ Clique para remover filtro'
+                  : 'Clique para filtrar';
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            stacked: true,
+            ticks: { color: xTickColor },
+            grid:  { color: '#2a2f3f' },
+          },
+          y: {
+            stacked: true,
+            ticks: { color: '#9097b0', callback: v => 'R$' + v.toLocaleString('pt-BR') },
+            grid:  { color: '#2a2f3f' },
+          },
+        },
+        onClick: (evt, elements) => {
+          if (!elements.length) return;
+          const idx = elements[0].index;
+          const clicked = idx + 1;
+          const yr = parseInt(document.getElementById('catv-year-sel').value);
+
+          if (filteredMonth === clicked && filteredYear === yr) {
+            filteredMonth = null;
+            document.getElementById('catv-filter-label').style.display = 'none';
+          } else {
+            filteredMonth = clicked;
+            filteredYear  = yr;
+            document.getElementById('catv-filter-label').style.display = '';
+            lucide.createIcons();
+          }
+          updateTitles();
+          buildStackedChart(annualData); // redesenha highlight
+          loadDetail();
+        },
+      },
+    });
+  }
+
+  // ── Detalhe por categoria ───────────────────────────
+  function loadDetail() {
+    const body = document.getElementById('catv-detail-body');
+    if (!body) return;
+    body.innerHTML = '<div style="text-align:center;padding:20px;"><div class="spinner" style="margin:0 auto;"></div></div>';
+
+    const p = new URLSearchParams({ year: filteredYear, type: viewType });
+    if (filteredMonth) p.set('month', filteredMonth);
+
+    api(`/reports/by-category?${p}`).then(data => {
+      const items = data.filter(d => d.total > 0);
+      if (!items.length) {
+        body.innerHTML = `<div class="empty-state">
+          <div class="empty-icon"><i data-lucide="pie-chart" style="width:24px;height:24px;"></i></div>
+          <div class="empty-title">Sem lançamentos no período</div>
+        </div>`; lucide.createIcons(); return;
+      }
+
+      const total = items.reduce((s, d) => s + d.total, 0);
+
+      body.innerHTML = `
+        <div style="display:flex;justify-content:space-between;margin-bottom:16px;">
+          <span style="font-size:13px;font-weight:600;color:var(--text2);">TODAS AS CATEGORIAS</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;">Total: ${fmt(total)}</span>
+        </div>
+        ${items.map(d => `
+          <details class="cat-detail-block" style="margin-bottom:12px;background:var(--bg3);border-radius:var(--radius-sm);border:1px solid var(--border);">
+            <summary style="padding:14px 16px;cursor:pointer;list-style:none;user-select:none;display:flex;align-items:center;gap:10px;">
+              <div style="width:12px;height:12px;border-radius:50%;background:${d.color};flex-shrink:0;"></div>
+              <span style="flex:1;font-size:14px;font-weight:600;">${escHtml(d.name)}</span>
+              <span class="badge badge-blue" style="margin-right:4px;">${d.count} lançamento(s)</span>
+              <span style="font-size:12px;color:var(--text3);margin-right:12px;">${total>0?Math.round(d.total/total*100):0}%</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-weight:700;">${fmt(d.total)}</span>
+              <i data-lucide="chevron-down" style="width:14px;height:14px;color:var(--text3);margin-left:8px;flex-shrink:0;transition:transform .2s;"></i>
+            </summary>
+            <div style="padding:0 16px 4px;">
+              <div style="height:6px;background:var(--bg4);border-radius:99px;overflow:hidden;margin-bottom:12px;">
+                <div style="height:100%;width:${total>0?Math.round(d.total/total*100):0}%;background:${d.color};border-radius:99px;transition:.6s ease;"></div>
+              </div>
+              <div class="catv-txn-list" data-cat-id="${d.id || ''}" data-cat-name="${escHtml(d.name)}" style="padding-bottom:12px;">
+                <div style="text-align:center;padding:12px;color:var(--text3);font-size:13px;">Carregando lançamentos...</div>
+              </div>
+            </div>
+          </details>`).join('')}`;
+
+      lucide.createIcons();
+
+      // Ao abrir um <details>, carrega os lançamentos
+      body.querySelectorAll('details.cat-detail-block').forEach(det => {
+        det.addEventListener('toggle', function() {
+          // Girar chevron
+          const icon = this.querySelector('[data-lucide="chevron-down"]');
+          if (icon) icon.style.transform = this.open ? 'rotate(180deg)' : '';
+
+          if (!this.open) return;
+          const listEl = this.querySelector('.catv-txn-list');
+          if (listEl.dataset.loaded) return; // já carregou
+          listEl.dataset.loaded = '1';
+
+          const catName = listEl.dataset.catName;
+          // Buscar lançamentos via API de transações filtrando por categoria
+          const p2 = new URLSearchParams({ year: filteredYear, type: viewType, per_page: 100, page: 1, category: catName });
+          if (filteredMonth) p2.set('month', filteredMonth);
+
+          api(`/api/transactions?${p2}`).then(txns => {
+            const list = txns.transactions || [];
+            if (!list.length) {
+              listEl.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text3);font-size:13px;">Nenhum lançamento encontrado.</div>';
+              return;
+            }
+            listEl.innerHTML = `
+              <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                <thead><tr>
+                  <th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.5px;">Data</th>
+                  <th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.5px;">Descrição</th>
+                  <th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.5px;">Conta</th>
+                  <th style="text-align:center;padding:6px 8px;color:var(--text3);font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.5px;">Status</th>
+                  <th style="text-align:right;padding:6px 8px;color:var(--text3);font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.5px;">Valor</th>
+                </tr></thead>
+                <tbody>${list.map(t => `
+                  <tr style="border-top:1px solid var(--border);">
+                    <td style="padding:8px;font-family:'JetBrains Mono',monospace;color:var(--text2);">${t.date}</td>
+                    <td style="padding:8px;font-weight:500;">${escHtml(t.description)}</td>
+                    <td style="padding:8px;color:var(--text2);">${escHtml(t.account_name)}</td>
+                    <td style="padding:8px;text-align:center;">${t.paid ? '<span class="badge badge-green">Pago</span>' : '<span class="badge badge-yellow">Pendente</span>'}</td>
+                    <td style="padding:8px;text-align:right;font-family:'JetBrains Mono',monospace;font-weight:700;" class="txn-amount ${t.type}">
+                      ${t.type==='income'?'+':'-'}${fmt(t.amount)}
+                    </td>
+                  </tr>`).join('')}
+                </tbody>
+              </table>`;
+          });
+        });
+      });
+    });
+  }
+
+  // ── Carregar tudo ───────────────────────────────────
+  function loadAll() {
+    const yr = parseInt(document.getElementById('catv-year-sel').value);
+    filteredYear = yr;
+    updateTitles();
+    api(`/reports/by-category-annual?year=${yr}&type=${viewType}`).then(data => {
+      annualData = data;
+      buildStackedChart(data);
+      loadDetail();
+    });
+  }
+
+  loadAll();
+}
+
+function renderAccountsView() {
+  const el = document.getElementById('view-accounts');
+  el.innerHTML = `<div class="page-hdr"><div class="page-hdr-left"><h2>Contas Bancárias</h2></div>
+    <div class="page-hdr-right"><button class="btn btn-primary btn-sm" id="new-account-btn"><i data-lucide="plus" style="width:14px;height:14px;"></i> Nova Conta</button></div></div>
+    <div id="accounts-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;"></div>
+    <div class="modal-overlay" id="account-modal">
+      <div class="modal-box" style="max-width:400px;">
+        <div class="modal-header"><span class="modal-title" id="acc-modal-title">Nova Conta</span><button class="modal-close" onclick="closeModal('account-modal')"><i data-lucide="x" style="width:18px;height:18px;"></i></button></div>
+        <form id="account-form">
+          <input type="hidden" id="acc-id"/>
+          <div class="form-group"><label class="form-label">Nome</label><input type="text" class="form-control" id="acc-name" required/></div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Banco</label><input type="text" class="form-control" id="acc-bank" placeholder="Ex: Nubank"/></div>
+            <div class="form-group"><label class="form-label">Tipo</label>
+              <select class="form-control" id="acc-type"><option value="checking">Corrente</option><option value="savings">Poupança</option><option value="cash">Dinheiro</option></select>
+            </div>
+          </div>
+          <div class="form-group"><label class="form-label">Cor</label><input type="color" class="form-control" id="acc-color" value="#1a73e8" style="height:40px;padding:4px;"/></div>
+          <div style="display:flex;gap:10px;justify-content:flex-end;">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('account-modal')">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Salvar</button>
+          </div>
+        </form>
+      </div>
+    </div>`;
+  lucide.createIcons();
+
+  const loadAccounts = () => {
+    api('/accounts/').then(accs => {
+      state.accounts = accs;
+      document.getElementById('accounts-grid').innerHTML = accs.map(a => `
+        <div class="card" style="border-left:4px solid ${a.color};padding:20px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+            <div>
+              <div style="font-size:16px;font-weight:600;">${escHtml(a.name)}</div>
+              <div style="font-size:12px;color:var(--text2);">${escHtml(a.bank_name)} · ${a.account_type}</div>
+            </div>
+            <div style="display:flex;gap:4px;">
+              <button class="btn-icon btn-sm" onclick="editAccount(${JSON.stringify(a).replace(/"/g,'&quot;')})" title="Editar"><i data-lucide="pencil" style="width:13px;height:13px;"></i></button>
+            </div>
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:${a.balance>=0?'var(--green)':'var(--red)'};">${fmt(a.balance)}</div>
+        </div>`).join('');
+      lucide.createIcons();
+    });
+  };
+  loadAccounts();
+
+  document.getElementById('new-account-btn').onclick = () => {
+    document.getElementById('acc-id').value='';
+    document.getElementById('acc-modal-title').textContent='Nova Conta';
+    document.getElementById('account-form').reset();
+    document.getElementById('acc-color').value='#1a73e8';
+    openModal('account-modal');
+  };
+
+  window.editAccount = (a) => {
+    document.getElementById('acc-id').value=a.id;
+    document.getElementById('acc-modal-title').textContent='Editar Conta';
+    document.getElementById('acc-name').value=a.name;
+    document.getElementById('acc-bank').value=a.bank_name;
+    document.getElementById('acc-type').value=a.account_type;
+    document.getElementById('acc-color').value=a.color;
+    openModal('account-modal');
+  };
+
+  document.getElementById('account-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('acc-id').value;
+    const body = { name: document.getElementById('acc-name').value, bank_name: document.getElementById('acc-bank').value, account_type: document.getElementById('acc-type').value, color: document.getElementById('acc-color').value };
+    const res = await api(id ? `/accounts/${id}` : '/accounts/', { method: id?'PUT':'POST', body: JSON.stringify(body) });
+    if (res.success || res.id) { showToast('Conta salva!','success'); closeModal('account-modal'); loadAccounts(); }
+    else showToast(res.error||'Erro.','danger');
+  };
+}
+
+function renderCategoriesView() {
+  const el = document.getElementById('view-categories');
+  el.innerHTML = `<div class="page-hdr"><div class="page-hdr-left"><h2>Categorias</h2></div>
+    <div class="page-hdr-right"><button class="btn btn-primary btn-sm" id="new-cat-btn"><i data-lucide="plus" style="width:14px;height:14px;"></i> Nova Categoria</button></div></div>
+    <div id="categories-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;"></div>
+    <div class="modal-overlay" id="cat-modal">
+      <div class="modal-box" style="max-width:380px;">
+        <div class="modal-header"><span class="modal-title" id="cat-modal-title">Nova Categoria</span><button class="modal-close" onclick="closeModal('cat-modal')"><i data-lucide="x" style="width:18px;height:18px;"></i></button></div>
+        <form id="cat-form">
+          <input type="hidden" id="cat-edit-id"/>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Nome</label><input type="text" class="form-control" id="cat-name" required/></div>
+            <div class="form-group"><label class="form-label">Cor</label><input type="color" class="form-control" id="cat-color" value="#6c757d" style="height:40px;padding:4px;"/></div>
+          </div>
+          <div class="form-group"><label class="form-label">Tipo</label>
+            <select class="form-control" id="cat-type-sel"><option value="expense">Despesa</option><option value="income">Receita</option><option value="both">Ambos</option></select>
+          </div>
+          <div style="display:flex;gap:10px;justify-content:flex-end;">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('cat-modal')">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Salvar</button>
+          </div>
+        </form>
+      </div>
+    </div>`;
+  lucide.createIcons();
+
+  const loadCats = () => {
+    api('/categories/').then(cats => {
+      document.getElementById('categories-grid').innerHTML = cats.map(c => `
+        <div class="card" style="padding:16px;display:flex;align-items:center;gap:14px;">
+          <div style="width:40px;height:40px;border-radius:10px;background:${c.color}22;display:flex;align-items:center;justify-content:center;color:${c.color};font-size:18px;flex-shrink:0;">⬤</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:14px;font-weight:600;">${escHtml(c.name)}</div>
+            <div style="font-size:12px;color:var(--text2);">${c.type==='income'?'Receita':c.type==='expense'?'Despesa':'Ambos'}</div>
+          </div>
+          <div style="display:flex;gap:4px;">
+            <button class="btn-icon btn-sm" onclick="editCat(${JSON.stringify(c).replace(/"/g,'&quot;')})" title="Editar"><i data-lucide="pencil" style="width:13px;height:13px;"></i></button>
+            <button class="btn-icon btn-sm" style="color:var(--red);" onclick="deleteCat(${c.id})" title="Excluir"><i data-lucide="trash-2" style="width:13px;height:13px;"></i></button>
+          </div>
+        </div>`).join('');
+      lucide.createIcons();
+    });
+  };
+  loadCats();
+
+  document.getElementById('new-cat-btn').onclick = () => {
+    document.getElementById('cat-edit-id').value='';
+    document.getElementById('cat-modal-title').textContent='Nova Categoria';
+    document.getElementById('cat-form').reset();
+    document.getElementById('cat-color').value='#6c757d';
+    openModal('cat-modal');
+  };
+
+  window.editCat = (c) => {
+    document.getElementById('cat-edit-id').value=c.id;
+    document.getElementById('cat-modal-title').textContent='Editar Categoria';
+    document.getElementById('cat-name').value=c.name;
+    document.getElementById('cat-color').value=c.color;
+    document.getElementById('cat-type-sel').value=c.type;
+    openModal('cat-modal');
+  };
+
+  window.deleteCat = async (id) => {
+    if (!confirm('Excluir categoria?')) return;
+    const res = await api(`/categories/${id}`, { method:'DELETE' });
+    if (res.success) { showToast('Categoria excluída!','success'); loadCats(); loadCategories(); }
+  };
+
+  document.getElementById('cat-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('cat-edit-id').value;
+    const body = { name: document.getElementById('cat-name').value, color: document.getElementById('cat-color').value, type: document.getElementById('cat-type-sel').value };
+    const res = await api(id ? `/categories/${id}` : '/categories/', { method: id?'PUT':'POST', body: JSON.stringify(body) });
+    if (res.success || res.id) { showToast('Categoria salva!','success'); closeModal('cat-modal'); loadCats(); loadCategories(); }
+    else showToast(res.error||'Erro.','danger');
+  };
+}
+
+
+// ═══════════════════════════════════════════════════
+//  BUDGETS VIEW
+// ═══════════════════════════════════════════════════
+function renderBudgetsView() {
+  const el = document.getElementById('view-budgets');
+  const MONTH_NAMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const MONTH_SHORT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const curYear = new Date().getFullYear();
+
+  // Estado do filtro
+  let filteredMonth = null;   // null = todos, 1-12 = mês selecionado
+  let filteredYear  = curYear;
+  let annualChartInst = null;
+  let summaryData = [];
+
+  el.innerHTML = `
+    <div class="page-hdr">
+      <div class="page-hdr-left"><h2>Orçamentos</h2><p>Planejamento e controle de gastos por categoria</p></div>
+      <div class="page-hdr-right">
+        <button class="btn btn-primary btn-sm" id="new-budget-btn">
+          <i data-lucide="plus" style="width:14px;height:14px;"></i> Novo Orçamento
+        </button>
+      </div>
+    </div>
+
+    <!-- Gráfico anual clicável -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span class="card-title" id="bud-chart-title">Visão Anual ${curYear}</span>
+          <span id="bud-filter-label" style="font-size:12px;color:var(--accent);display:none;">
+            <i data-lucide="filter" style="width:12px;height:12px;"></i> Clique na barra para remover o filtro
+          </span>
+        </div>
+        <select class="account-select" id="bud-year-sel" style="font-size:13px;padding:6px 10px;">
+          ${[curYear-1, curYear, curYear+1].map(y => `<option value="${y}" ${y===curYear?'selected':''}>${y}</option>`).join('')}
+        </select>
+      </div>
+      <div class="card-body"><canvas id="bud-annual-chart" height="80" style="cursor:pointer;"></canvas></div>
+    </div>
+
+    <!-- Orçamentos do mês filtrado -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header">
+        <span class="card-title" id="bud-list-title">Selecione um mês no gráfico</span>
+      </div>
+      <div id="bud-list" style="padding:16px;">
+        <div style="text-align:center;padding:20px;"><div class="spinner" style="margin:0 auto;"></div></div>
+      </div>
+    </div>
+
+    <!-- Despesas detalhadas -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title" id="bud-detail-title">Despesas Detalhadas por Categoria</span>
+        <span style="font-size:12px;color:var(--text2);">Clique em uma categoria para ver os lançamentos</span>
+      </div>
+      <div id="bud-detail" style="padding:16px;">
+        <div style="text-align:center;padding:20px;"><div class="spinner" style="margin:0 auto;"></div></div>
+      </div>
+    </div>
+
+    <!-- Modal orçamento -->
+    <div class="modal-overlay" id="budget-modal">
+      <div class="modal-box" style="max-width:400px;">
+        <div class="modal-header">
+          <span class="modal-title" id="bud-modal-title">Novo Orçamento</span>
+          <button class="modal-close" onclick="closeModal('budget-modal')"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Categoria</label>
+          <select class="form-control" id="bud-cat-sel"><option value="">Carregando...</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor do Orçamento (R$)</label>
+          <input type="number" class="form-control" id="bud-amount" placeholder="0,00" min="0.01" step="0.01"/>
+        </div>
+        <div class="form-row" id="bud-recurrence-row">
+          <div class="form-group">
+            <label class="form-label">Repetição</label>
+            <select class="form-control" id="bud-recurrence">
+              <option value="0">Sem repetição</option>
+              <option value="1">Mensalmente</option>
+              <option value="2">Bimestralmente</option>
+              <option value="3">Trimestralmente</option>
+              <option value="6">Semestralmente</option>
+              <option value="12">Anualmente</option>
+            </select>
+          </div>
+          <div class="form-group" id="bud-times-wrap" style="display:none;">
+            <label class="form-label">Quantas vezes?</label>
+            <select class="form-control" id="bud-recurrence-times">
+              <option value="2">2 vezes</option><option value="3">3 vezes</option>
+              <option value="4">4 vezes</option><option value="5">5 vezes</option>
+              <option value="6">6 vezes</option><option value="7">7 vezes</option>
+              <option value="8">8 vezes</option><option value="9">9 vezes</option>
+              <option value="10">10 vezes</option><option value="11">11 vezes</option>
+              <option value="12">12 vezes</option>
+            </select>
+          </div>
+        </div>
+        <input type="hidden" id="bud-edit-id"/>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+          <button class="btn btn-ghost" onclick="closeModal('budget-modal')">Cancelar</button>
+          <button class="btn btn-primary" id="bud-save-btn">Salvar</button>
+        </div>
+      </div>
+    </div>`;
+
+  lucide.createIcons();
+
+  // ── Helpers de status ──────────────────────────────
+  function statusColor(s) {
+    return s === 'over' ? 'var(--red)' : s === 'warning' ? 'var(--yellow)' : 'var(--green)';
+  }
+  function statusBadge(s) {
+    return s === 'over'    ? '<span class="badge badge-red">Estourado</span>'
+         : s === 'warning' ? '<span class="badge badge-yellow">Atenção</span>'
+                           : '<span class="badge badge-green">OK</span>';
+  }
+
+  // ── Atualiza títulos dos cards ─────────────────────
+  function updateTitles() {
+    const lbl = filteredMonth ? `${MONTH_NAMES[filteredMonth-1]} ${filteredYear}` : `Ano ${filteredYear}`;
+    document.getElementById('bud-list-title').textContent   = `Orçamentos — ${lbl}`;
+    document.getElementById('bud-detail-title').textContent = `Despesas Detalhadas — ${lbl}`;
+  }
+
+  // ── Carrega orçamentos do mês/ano filtrado ─────────
+  function loadBudgets() {
+    const list = document.getElementById('bud-list');
+    if (!list) return;
+    list.innerHTML = '<div style="text-align:center;padding:20px;"><div class="spinner" style="margin:0 auto;"></div></div>';
+    const url = filteredMonth
+      ? `/budgets/?month=${filteredMonth}&year=${filteredYear}`
+      : `/budgets/?year=${filteredYear}`;
+    api(url).then(data => {
+      if (!data.length) {
+        list.innerHTML = `<div class="empty-state">
+          <div class="empty-icon"><i data-lucide="target" style="width:24px;height:24px;"></i></div>
+          <div class="empty-title">Nenhum orçamento para este mês</div>
+          <div class="empty-sub">Clique em "+ Novo Orçamento" para adicionar.</div>
+        </div>`; lucide.createIcons(); return;
+      }
+      list.innerHTML = data.map(b => `
+        <div style="margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid var(--border);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:12px;height:12px;border-radius:50%;background:${b.category_color};flex-shrink:0;"></div>
+              <span style="font-size:15px;font-weight:600;">${escHtml(b.category_name)}</span>
+              ${b.status ? statusBadge(b.status) : ''}
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text2);">${fmt(b.spent)} / ${fmt(b.amount)}</span>
+              <button class="btn-icon btn-sm" title="Editar" onclick="editBudget(${JSON.stringify(b).replace(/"/g,'&quot;')})"><i data-lucide="pencil" style="width:13px;height:13px;"></i></button>
+              <button class="btn-icon btn-sm" style="color:var(--red)" title="Excluir" onclick="deleteBudget(${b.id})"><i data-lucide="trash-2" style="width:13px;height:13px;"></i></button>
+            </div>
+          </div>
+          <div style="height:10px;background:var(--bg3);border-radius:99px;overflow:hidden;margin-bottom:6px;">
+            <div style="height:100%;width:${Math.min(b.percent||0,100)}%;background:${statusColor(b.status)};border-radius:99px;transition:.6s ease;"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);">
+            <span>${b.percent||0}% utilizado</span>
+            <span>${b.remaining >= 0 ? 'Restam ' + fmt(b.remaining) : 'Excedeu ' + fmt(Math.abs(b.remaining))}</span>
+          </div>
+        </div>`).join('');
+      lucide.createIcons();
+    });
+  }
+
+  // ── Carrega despesas detalhadas ────────────────────
+  function loadBudgetDetail() {
+    const container = document.getElementById('bud-detail');
+    if (!container) return;
+    container.innerHTML = '<div style="text-align:center;padding:20px;"><div class="spinner" style="margin:0 auto;"></div></div>';
+    const url = filteredMonth
+      ? `/budgets/detail?month=${filteredMonth}&year=${filteredYear}`
+      : `/budgets/detail?year=${filteredYear}`;
+    api(url).then(data => {
+      if (!data.length) {
+        container.innerHTML = `<div class="empty-state">
+          <div class="empty-icon"><i data-lucide="bar-chart-2" style="width:24px;height:24px;"></i></div>
+          <div class="empty-title">Sem lançamentos neste mês</div>
+        </div>`; lucide.createIcons(); return;
+      }
+      container.innerHTML = data.map(cat => `
+        <details style="margin-bottom:12px;background:var(--bg3);border-radius:var(--radius-sm);border:1px solid var(--border);">
+          <summary style="padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;list-style:none;user-select:none;">
+            <div style="width:10px;height:10px;border-radius:50%;background:${cat.category_color};flex-shrink:0;"></div>
+            <span style="flex:1;font-size:14px;font-weight:600;">${escHtml(cat.category_name)}</span>
+            ${cat.budget > 0 ? `
+              <div style="width:100px;height:6px;background:var(--bg4);border-radius:99px;overflow:hidden;margin-right:8px;">
+                <div style="height:100%;width:${Math.min(cat.percent||0,100)}%;background:${statusColor(cat.status)};border-radius:99px;"></div>
+              </div>
+              ${statusBadge(cat.status)}
+            ` : '<span class="badge badge-blue" style="margin-right:8px;">Sem orçamento</span>'}
+            <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--red);margin-left:8px;">-${fmt(cat.spent)}</span>
+          </summary>
+          <div style="padding:0 16px 14px;">
+            ${cat.budget > 0 ? `
+              <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:10px;padding-top:10px;border-top:1px solid var(--border);">
+                <span>Orçado: <strong style="color:var(--text)">${fmt(cat.budget)}</strong></span>
+                <span>Gasto: <strong style="color:var(--red)">${fmt(cat.spent)}</strong></span>
+                <span>${cat.remaining >= 0 ? 'Restam: <strong style="color:var(--green)">' + fmt(cat.remaining) + '</strong>' : 'Excedeu: <strong style="color:var(--red)">' + fmt(Math.abs(cat.remaining)) + '</strong>'}</span>
+              </div>` : ''}
+            <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:8px;">
+              <thead><tr>
+                <th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.5px;">Data</th>
+                <th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.5px;">Descrição</th>
+                <th style="text-align:left;padding:6px 8px;color:var(--text3);font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.5px;">Conta</th>
+                <th style="text-align:right;padding:6px 8px;color:var(--text3);font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.5px;">Valor</th>
+              </tr></thead>
+              <tbody>${cat.transactions.length ? cat.transactions.map(t => `
+                <tr style="border-top:1px solid var(--border);">
+                  <td style="padding:8px;font-family:'JetBrains Mono',monospace;color:var(--text2);">${t.date}</td>
+                  <td style="padding:8px;">${escHtml(t.description)}</td>
+                  <td style="padding:8px;color:var(--text2);">${escHtml(t.account_name)}</td>
+                  <td style="padding:8px;text-align:right;font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--red);">-${fmt(t.amount)}</td>
+                </tr>`).join('') : '<tr><td colspan="4" style="padding:12px;text-align:center;color:var(--text3);">Nenhum lançamento</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+        </details>`).join('');
+      lucide.createIcons();
+    });
+  }
+
+  // ── Gráfico anual ──────────────────────────────────
+  function buildAnnualChart(data) {
+    const ctx = document.getElementById('bud-annual-chart')?.getContext('2d');
+    if (!ctx) return;
+    if (annualChartInst) annualChartInst.destroy();
+
+    const budgetBg = data.map((_, i) =>
+      filteredMonth && (i+1) === filteredMonth ? 'rgba(79,124,255,0.9)' : 'rgba(79,124,255,0.3)');
+    const budgetBorder = data.map((_, i) =>
+      filteredMonth && (i+1) === filteredMonth ? '#fff' : '#4f7cff');
+    const spentBg = data.map((d, i) => {
+      const over = d.spent > d.budget && d.budget > 0;
+      const active = filteredMonth && (i+1) === filteredMonth;
+      return over ? (active ? 'rgba(244,63,94,1)' : 'rgba(244,63,94,0.55)') : (active ? 'rgba(34,197,94,1)' : 'rgba(34,197,94,0.45)');
+    });
+    const spentBorder = data.map(d => d.spent > d.budget && d.budget > 0 ? '#f43f5e' : '#22c55e');
+
+    annualChartInst = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: MONTH_SHORT,
+        datasets: [
+          { label: 'Orçado', data: data.map(d => d.budget), backgroundColor: budgetBg, borderColor: budgetBorder, borderWidth: 2, borderRadius: 4 },
+          { label: 'Gasto',  data: data.map(d => d.spent),  backgroundColor: spentBg,  borderColor: spentBorder,  borderWidth: 2, borderRadius: 4 },
+        ],
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { labels: { color: '#9097b0' } },
+          tooltip: { callbacks: { footer: (items) => {
+            const i = items[0]?.dataIndex;
+            return filteredMonth && (i+1) === filteredMonth
+              ? '✓ Clique para remover filtro'
+              : 'Clique para filtrar';
+          }}}
+        },
+        scales: {
+          x: { ticks: { color: (c) => filteredMonth && (c.index+1) === filteredMonth ? '#fff' : '#9097b0' }, grid: { color: '#2a2f3f' } },
+          y: { ticks: { color: '#9097b0', callback: v => 'R$' + v.toLocaleString('pt-BR') }, grid: { color: '#2a2f3f' } },
+        },
+        onClick: (evt, elements) => {
+          if (!elements.length) return;
+          const idx = elements[0].index;
+          const clicked = idx + 1;
+          const yr = parseInt(document.getElementById('bud-year-sel').value);
+
+          if (filteredMonth === clicked && filteredYear === yr) {
+            // remove filtro
+            filteredMonth = null;
+            document.getElementById('bud-filter-label').style.display = 'none';
+            updateTitles();
+            loadBudgets();
+            loadBudgetDetail();
+          } else {
+            filteredMonth = clicked;
+            filteredYear  = yr;
+            document.getElementById('bud-filter-label').style.display = '';
+            updateTitles();
+            loadBudgets();
+            loadBudgetDetail();
+          }
+          buildAnnualChart(summaryData); // redesenha highlight
+        },
+      },
+    });
+  }
+
+  function loadAnnualChart() {
+    const yr = parseInt(document.getElementById('bud-year-sel').value);
+    filteredMonth = null; // troca de ano limpa filtro
+    filteredYear  = yr;
+    document.getElementById('bud-filter-label').style.display = 'none';
+    document.getElementById('bud-chart-title').textContent = `Visão Anual ${yr}`;
+    updateTitles();
+    api(`/budgets/summary?year=${yr}`).then(data => {
+      summaryData = data;
+      buildAnnualChart(data);
+      loadBudgets();
+      loadBudgetDetail();
+    });
+  }
+
+  // ── Modal: novo orçamento ──────────────────────────
+  document.getElementById('new-budget-btn').onclick = async () => {
+    document.getElementById('bud-edit-id').value = '';
+    document.getElementById('bud-modal-title').textContent = 'Novo Orçamento';
+    document.getElementById('bud-amount').value = '';
+    document.getElementById('bud-recurrence').value = '0';
+    document.getElementById('bud-recurrence-times').value = '2';
+    document.getElementById('bud-times-wrap').style.display = 'none';
+    document.getElementById('bud-recurrence-row').style.display = '';
+    const cats = await api('/categories/');
+    const expCats = cats.filter(c => c.type === 'expense' || c.type === 'both');
+    document.getElementById('bud-cat-sel').innerHTML = expCats.map(c =>
+      `<option value="${c.id}">${escHtml(c.name)}</option>`
+    ).join('');
+    openModal('budget-modal'); lucide.createIcons();
+  };
+
+  document.getElementById('bud-recurrence').addEventListener('change', function() {
+    document.getElementById('bud-times-wrap').style.display = this.value !== '0' ? '' : 'none';
+  });
+
+  document.getElementById('bud-save-btn').onclick = async () => {
+    const id = document.getElementById('bud-edit-id').value;
+    const amount = parseFloat(document.getElementById('bud-amount').value);
+    const category_id = document.getElementById('bud-cat-sel').value;
+    if (!amount || amount <= 0) { showToast('Informe um valor válido.','danger'); return; }
+    const recurrence = id ? 0 : parseInt(document.getElementById('bud-recurrence').value);
+    const recurrence_times = recurrence > 0 ? parseInt(document.getElementById('bud-recurrence-times').value) : 1;
+    const saveMonth = filteredMonth || new Date().getMonth() + 1;
+    const saveYear  = filteredYear  || new Date().getFullYear();
+    const body = { category_id: category_id || null, amount, month: saveMonth, year: saveYear, recurrence, recurrence_times };
+    const res = await api(id ? `/budgets/${id}` : '/budgets/', { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
+    if (res.success || res.id) {
+      showToast('Orçamento salvo!','success');
+      closeModal('budget-modal');
+      loadAnnualChart();
+      if (filteredMonth) { loadBudgets(); loadBudgetDetail(); }
+    } else showToast(res.error||'Erro ao salvar.','danger');
+  };
+
+  window.editBudget = async (b) => {
+    document.getElementById('bud-edit-id').value = b.id;
+    document.getElementById('bud-modal-title').textContent = 'Editar Orçamento';
+    document.getElementById('bud-amount').value = b.amount;
+    document.getElementById('bud-recurrence-row').style.display = 'none';
+    const cats = await api('/categories/');
+    const expCats = cats.filter(c => c.type === 'expense' || c.type === 'both');
+    document.getElementById('bud-cat-sel').innerHTML = expCats.map(c =>
+      `<option value="${c.id}" ${c.id === b.category_id ? 'selected' : ''}>${escHtml(c.name)}</option>`
+    ).join('');
+    openModal('budget-modal'); lucide.createIcons();
+  };
+
+  window.deleteBudget = async (id) => {
+    if (!confirm('Excluir este orçamento?')) return;
+    const res = await api(`/budgets/${id}`, { method: 'DELETE' });
+    if (res.success) {
+      showToast('Orçamento excluído!','success');
+      loadAnnualChart();
+      if (filteredMonth) { loadBudgets(); loadBudgetDetail(); }
+    }
+  };
+
+  // ── Troca de ano ───────────────────────────────────
+  document.getElementById('bud-year-sel').onchange = loadAnnualChart;
+
+  // ── Init ───────────────────────────────────────────
+  loadAnnualChart();
+}
+
+// ═══════════════════════════════════════════════════
+//  PROFILE PAGE
+// ═══════════════════════════════════════════════════
+// Profile is a separate page via auth_bp
+
+// ═══════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════
+document.getElementById('transfer-date').value = todayISO();
+loadDashboard();
+</script>
+{% endblock %}

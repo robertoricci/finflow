@@ -1,0 +1,43 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: finflow_db
+    environment:
+      POSTGRES_DB: finflow_db
+      POSTGRES_USER: finflow_user
+      POSTGRES_PASSWORD: finflow_pass
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - finflow_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finflow_user -d finflow_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build: .
+    container_name: finflow_web
+    ports:
+      - "5000:5000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://finflow_user:finflow_pass@postgres:5432/finflow_db
+      SECRET_KEY: super-secret-key-change-in-production
+      FLASK_APP: 
+      FLASK_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - finflow_net
+    restart: on-failure
+
+volumes:
+  pgdata:
+
+networks:
+  finflow_net:
+    driver: bridge

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Criar Conta{% endblock %}
+
+{% block extra_style %}
+.auth-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: radial-gradient(ellipse 60% 50% at 50% 0%, rgba(79,124,255,0.1) 0%, transparent 60%), var(--bg); }
+.auth-card { width: 100%; max-width: 480px; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 40px; }
+.brand { text-align: center; margin-bottom: 32px; }
+.brand-name { font-size: 26px; font-weight: 700; color: var(--accent); letter-spacing: -1px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.brand-tag { font-size: 13px; color: var(--text2); margin-top: 4px; }
+.auth-title { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+.auth-sub { color: var(--text2); font-size: 14px; margin-bottom: 28px; }
+.auth-link { color: var(--accent); font-weight: 600; }
+.input-icon-wrap { position: relative; }
+.input-icon-wrap .form-control { padding-left: 42px; }
+.input-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--text3); pointer-events: none; }
+.btn-full { width: 100%; justify-content: center; padding: 13px; font-size: 15px; }
+{% endblock %}
+
+{% block body %}
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="brand">
+      <div class="brand-name"><i data-lucide="trending-up" style="width:26px;height:26px;"></i> FinFlow</div>
+      <div class="brand-tag">Controle Financeiro Inteligente</div>
+    </div>
+    <h2 class="auth-title">Criar sua conta</h2>
+    <p class="auth-sub">Já tem conta? <a href="{{ url_for('auth.login') }}" class="auth-link">Entrar</a></p>
+
+    <form method="POST">
+      <div class="form-group">
+        <label class="form-label">Nome completo</label>
+        <div class="input-icon-wrap">
+          <i data-lucide="user" class="input-icon" style="width:16px;height:16px;"></i>
+          <input type="text" name="name" class="form-control" placeholder="Seu nome" required/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">E-mail</label>
+        <div class="input-icon-wrap">
+          <i data-lucide="mail" class="input-icon" style="width:16px;height:16px;"></i>
+          <input type="email" name="email" class="form-control" placeholder="seu@email.com" required/>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Senha</label>
+          <div class="input-icon-wrap">
+            <i data-lucide="lock" class="input-icon" style="width:16px;height:16px;"></i>
+            <input type="password" name="password" class="form-control" placeholder="Mín. 6 caracteres" required/>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Confirmar senha</label>
+          <div class="input-icon-wrap">
+            <i data-lucide="lock" class="input-icon" style="width:16px;height:16px;"></i>
+            <input type="password" name="confirm_password" class="form-control" placeholder="Repita a senha" required/>
+          </div>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-full">
+        <i data-lucide="user-plus" style="width:16px;height:16px;"></i> Criar conta grátis
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}

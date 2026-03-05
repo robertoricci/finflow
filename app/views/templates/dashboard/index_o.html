@@ -1,0 +1,676 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block extra_style %}
+/* ─── APP SHELL ──────────────────────────── */
+.app { display: flex; min-height: 100vh; }
+
+/* ─── SIDEBAR ────────────────────────────── */
+.sidebar {
+  width: var(--sidebar-w); flex-shrink: 0;
+  background: var(--bg2); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  position: fixed; top: 0; left: 0; height: 100vh;
+  z-index: 200; transition: transform var(--transition);
+}
+.sidebar-brand {
+  height: var(--topbar-h); display: flex; align-items: center;
+  gap: 10px; padding: 0 20px; border-bottom: 1px solid var(--border);
+  font-size: 20px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px;
+  flex-shrink: 0;
+}
+.sidebar-nav { flex: 1; overflow-y: auto; padding: 14px 10px; }
+.nav-section { margin-bottom: 24px; }
+.nav-section-title { font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; padding: 0 10px; margin-bottom: 8px; }
+.nav-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  font-size: 14px; font-weight: 500; color: var(--text2);
+  cursor: pointer; transition: var(--transition); margin-bottom: 2px;
+}
+.nav-item:hover { background: var(--bg3); color: var(--text); }
+.nav-item.active { background: var(--accent-glow); color: var(--accent); font-weight: 600; }
+.nav-item .nav-icon { width: 18px; height: 18px; flex-shrink: 0; }
+.nav-item .nav-badge { margin-left: auto; background: var(--red); color: #fff; border-radius: 99px; padding: 1px 7px; font-size: 11px; font-weight: 700; }
+
+.sidebar-footer { padding: 14px; border-top: 1px solid var(--border); flex-shrink: 0; }
+.user-card { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: var(--radius-sm); cursor: pointer; transition: var(--transition); }
+.user-card:hover { background: var(--bg3); }
+.user-avatar { width: 36px; height: 36px; border-radius: 10px; background: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0; }
+.user-info { min-width: 0; flex: 1; }
+.user-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-email { font-size: 11px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ─── TOPBAR ─────────────────────────────── */
+.topbar {
+  height: var(--topbar-h); background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 20px;
+  gap: 14px; position: sticky; top: 0; z-index: 100;
+}
+.topbar-menu-btn {
+  display: none; background: none; border: none;
+  color: var(--text2); cursor: pointer; padding: 6px;
+  border-radius: var(--radius-sm); transition: var(--transition);
+}
+.topbar-menu-btn:hover { background: var(--bg3); color: var(--text); }
+@media (max-width: 768px) { .topbar-menu-btn { display: flex; } }
+.topbar-search {
+  flex: 1; max-width: 340px; position: relative;
+}
+.topbar-search input {
+  width: 100%; background: var(--bg3); border: 1px solid var(--border);
+  color: var(--text); border-radius: 99px; padding: 8px 16px 8px 38px;
+  font-size: 13px; transition: var(--transition);
+}
+.topbar-search input:focus { outline: none; border-color: var(--accent); }
+.topbar-search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text3); pointer-events: none; }
+.topbar-spacer { flex: 1; }
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
+.notif-btn { position: relative; }
+.notif-dot { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; background: var(--red); border-radius: 50%; border: 2px solid var(--bg2); display: none; }
+.notif-dot.show { display: block; }
+
+/* ─── MAIN ───────────────────────────────── */
+.main { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+@media (max-width: 768px) { .main { margin-left: 0; } }
+.content { padding: 24px; flex: 1; }
+
+/* ─── PAGE HEADER ────────────────────────── */
+.page-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 14px; }
+.page-hdr-left h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+.page-hdr-left p { color: var(--text2); font-size: 13px; margin-top: 2px; }
+.page-hdr-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* ─── MONTH NAV ──────────────────────────── */
+.month-nav { display: flex; align-items: center; gap: 8px; background: var(--bg3); border: 1px solid var(--border); border-radius: 99px; padding: 4px 8px; }
+.month-nav-btn { background: none; border: none; color: var(--text2); cursor: pointer; padding: 4px 8px; border-radius: 99px; transition: var(--transition); }
+.month-nav-btn:hover { background: var(--bg4); color: var(--text); }
+#month-label { font-size: 14px; font-weight: 600; min-width: 120px; text-align: center; }
+
+/* ─── ACCOUNT SELECTOR ───────────────────── */
+.account-select {
+  background: var(--bg3); border: 1px solid var(--border);
+  color: var(--text); border-radius: var(--radius-sm); padding: 8px 14px;
+  font-size: 13px; font-weight: 500; cursor: pointer;
+}
+.account-select:focus { outline: none; border-color: var(--accent); }
+
+/* ─── STAT CARDS ─────────────────────────── */
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+@media (max-width: 1100px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px)  { .stats-grid { grid-template-columns: 1fr; } }
+
+.stat-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px; position: relative;
+  overflow: hidden; transition: var(--transition);
+}
+.stat-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.stat-card::before { content: ''; position: absolute; inset: 0; opacity: 0; transition: var(--transition); }
+.stat-card.balance::before { background: radial-gradient(ellipse at top right, var(--accent-glow), transparent 70%); }
+.stat-card.expense::before { background: radial-gradient(ellipse at top right, var(--red-glow), transparent 70%); }
+.stat-card.income::before  { background: radial-gradient(ellipse at top right, var(--green-glow), transparent 70%); }
+.stat-card.overdue::before { background: radial-gradient(ellipse at top right, var(--yellow-glow), transparent 70%); }
+.stat-card:hover::before { opacity: 1; }
+
+.stat-icon { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+.stat-icon.blue   { background: var(--accent-glow);  color: var(--accent); }
+.stat-icon.green  { background: var(--green-glow);   color: var(--green); }
+.stat-icon.red    { background: var(--red-glow);     color: var(--red); }
+.stat-icon.yellow { background: var(--yellow-glow);  color: var(--yellow); }
+.stat-label { font-size: 12px; color: var(--text2); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+.stat-value { font-size: 24px; font-weight: 700; letter-spacing: -1px; font-family: 'JetBrains Mono', monospace; }
+.stat-sub { font-size: 11px; color: var(--text2); margin-top: 6px; }
+.stat-action { position: absolute; top: 14px; right: 14px; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 5px; color: var(--text3); cursor: pointer; transition: var(--transition); }
+.stat-action:hover { color: var(--text); }
+
+/* ─── CHARTS ROW ─────────────────────────── */
+.charts-row { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 24px; }
+@media (max-width: 900px) { .charts-row { grid-template-columns: 1fr; } }
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); }
+.card-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; border-bottom: 1px solid var(--border); }
+.card-title { font-size: 15px; font-weight: 600; }
+.card-body { padding: 20px; }
+
+/* ─── TRANSACTIONS TABLE ─────────────────── */
+.txn-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); }
+.txn-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); gap: 12px; flex-wrap: wrap; }
+.txn-filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.filter-btn { background: var(--bg3); border: 1px solid var(--border); color: var(--text2); border-radius: 99px; padding: 5px 14px; font-size: 12px; font-weight: 600; cursor: pointer; transition: var(--transition); }
+.filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.filter-btn.income.active  { background: var(--green); border-color: var(--green); }
+.filter-btn.expense.active { background: var(--red); border-color: var(--red); }
+
+.txn-table-wrap { overflow-x: auto; }
+table.txn-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.txn-table th { padding: 10px 16px; text-align: left; font-size: 11px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.txn-table td { padding: 12px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.txn-table tr:last-child td { border-bottom: none; }
+.txn-table tr:hover td { background: var(--bg3); }
+
+.txn-desc { font-weight: 500; }
+.txn-cat { display: flex; align-items: center; gap: 8px; }
+.cat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.txn-amount { font-family: 'JetBrains Mono', monospace; font-weight: 600; white-space: nowrap; }
+.txn-amount.income  { color: var(--green); }
+.txn-amount.expense { color: var(--red); }
+.txn-paid { cursor: pointer; }
+.txn-actions { display: flex; gap: 4px; }
+.txn-pagination { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text2); }
+.page-btns { display: flex; gap: 4px; }
+.page-btn { background: var(--bg3); border: 1px solid var(--border); color: var(--text2); padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; transition: var(--transition); }
+.page-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.page-btn:hover:not(.active) { background: var(--bg4); }
+
+/* ─── MOBILE OVERLAY ─────────────────────── */
+.sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 199; }
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.show { display: block; }
+}
+
+/* ─── EMPTY STATE ────────────────────────── */
+.empty-state { text-align: center; padding: 48px 24px; }
+.empty-icon { width: 56px; height: 56px; border-radius: 16px; background: var(--bg3); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; color: var(--text3); }
+.empty-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+.empty-sub { color: var(--text2); font-size: 13px; }
+
+/* ─── DROPDOWN ───────────────────────────── */
+.dropdown { position: relative; }
+.dropdown-menu {
+  display: none; position: absolute; right: 0; top: calc(100% + 8px);
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); min-width: 180px;
+  box-shadow: var(--shadow); z-index: 300; overflow: hidden;
+}
+.dropdown-menu.open { display: block; }
+.dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 13px; color: var(--text2); cursor: pointer; transition: var(--transition); }
+.dropdown-item:hover { background: var(--bg3); color: var(--text); }
+.dropdown-item.danger:hover { color: var(--red); }
+.dropdown-divider { height: 1px; background: var(--border); margin: 4px 0; }
+
+/* ─── NOTIF PANEL ────────────────────────── */
+.notif-panel {
+  display: none; position: absolute; right: 0; top: calc(100% + 8px);
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); min-width: 320px;
+  box-shadow: var(--shadow); z-index: 300;
+}
+.notif-panel.open { display: block; }
+.notif-panel-header { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.notif-list { max-height: 300px; overflow-y: auto; }
+.notif-item { padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: var(--transition); }
+.notif-item:hover { background: var(--bg3); }
+.notif-item:last-child { border-bottom: none; }
+.notif-item-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+.notif-item-msg { font-size: 12px; color: var(--text2); line-height: 1.4; }
+.notif-item-time { font-size: 11px; color: var(--text3); margin-top: 4px; }
+.notif-item.unread { background: var(--accent-glow); }
+{% endblock %}
+
+{% block body %}
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+<!-- SIDEBAR -->
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <i data-lucide="trending-up" style="width:22px;height:22px;"></i>
+    FinFlow
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">
+      <div class="nav-section-title">Principal</div>
+      <div class="nav-item active" data-view="dashboard">
+        <i data-lucide="layout-dashboard" class="nav-icon"></i> Dashboard
+      </div>
+      <div class="nav-item" data-view="transactions">
+        <i data-lucide="arrow-left-right" class="nav-icon"></i> Lançamentos
+      </div>
+      <div class="nav-item" data-view="pending">
+        <i data-lucide="clock" class="nav-icon"></i> Pendências
+        <span class="nav-badge" id="pending-badge" style="display:none">0</span>
+      </div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-title">Análises</div>
+      <div class="nav-item" data-view="charts">
+        <i data-lucide="bar-chart-2" class="nav-icon"></i> Gráficos
+      </div>
+      <div class="nav-item" data-view="by-category">
+        <i data-lucide="pie-chart" class="nav-icon"></i> Por Categoria
+      </div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-title">Planejamento</div>
+      <div class="nav-item" data-view="budgets">
+        <i data-lucide="target" class="nav-icon"></i> Orçamentos
+      </div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-title">Cadastros</div>
+      <div class="nav-item" data-view="accounts">
+        <i data-lucide="wallet" class="nav-icon"></i> Contas Bancárias
+      </div>
+      <div class="nav-item" data-view="categories">
+        <i data-lucide="tag" class="nav-icon"></i> Categorias
+      </div>
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    {% if current_user.is_admin %}
+    <a href="/admin" style="display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:var(--radius-sm);color:var(--red);font-size:13px;font-weight:600;text-decoration:none;margin-bottom:6px;transition:var(--transition);background:rgba(244,63,94,.08);" onmouseover="this.style.background='rgba(244,63,94,.15)'" onmouseout="this.style.background='rgba(244,63,94,.08)'">
+      <i data-lucide="shield" style="width:14px;height:14px;"></i> Painel Admin
+    </a>
+    {% endif %}
+    <div class="dropdown">
+      <div class="user-card" id="user-dropdown-btn">
+        <div class="user-avatar">{{ current_user.name[0].upper() }}</div>
+        <div class="user-info">
+          <div class="user-name">{{ current_user.name }}</div>
+          <div style="display:flex;align-items:center;gap:5px;">
+            <span class="user-email">{{ current_user.email }}</span>
+          </div>
+        </div>
+        <i data-lucide="chevron-up" style="width:14px;height:14px;color:var(--text3);"></i>
+      </div>
+      <div class="dropdown-menu" id="user-dropdown">
+        <div style="padding:10px 14px 6px;border-bottom:1px solid var(--border);margin-bottom:4px;">
+          <div style="font-size:12px;font-weight:700;color:var(--text2);">{{ current_user.name }}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:1px;">{{ current_user.email }}</div>
+          <div style="margin-top:6px;display:flex;align-items:center;gap:6px;">
+            <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:rgba(79,124,255,.15);color:var(--accent);">{{ current_user.plan_label }}</span>
+            {% if current_user.plan_status == 'active' %}
+            <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:rgba(34,197,94,.15);color:var(--green);">Ativo</span>
+            {% elif current_user.plan_status == 'trial' %}
+            <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:rgba(245,158,11,.15);color:var(--yellow);">Trial</span>
+            {% elif current_user.plan_status == 'overdue' %}
+            <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:rgba(244,63,94,.15);color:var(--red);">Inadimplente</span>
+            {% endif %}
+          </div>
+        </div>
+        <a href="{{ url_for('auth.profile') }}" class="dropdown-item">
+          <i data-lucide="settings" style="width:14px;height:14px;"></i> Configurações
+        </a>
+        <div class="dropdown-divider"></div>
+        <a href="{{ url_for('auth.logout') }}" class="dropdown-item danger">
+          <i data-lucide="log-out" style="width:14px;height:14px;"></i> Sair do sistema
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <button class="topbar-menu-btn" id="sidebar-toggle">
+      <i data-lucide="menu" style="width:20px;height:20px;"></i>
+    </button>
+    <div class="topbar-search">
+      <i data-lucide="search" class="topbar-search-icon" style="width:14px;height:14px;"></i>
+      <input type="text" id="search-input" placeholder="Buscar lançamentos..."/>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-actions">
+      <div class="dropdown notif-btn" id="notif-dropdown-wrap">
+        <button class="btn-icon" id="notif-btn">
+          <i data-lucide="bell" style="width:18px;height:18px;"></i>
+          <div class="notif-dot" id="notif-dot"></div>
+        </button>
+        <div class="notif-panel" id="notif-panel">
+          <div class="notif-panel-header">
+            <span style="font-size:14px;font-weight:600;">Notificações</span>
+            <button class="btn btn-ghost btn-sm" id="mark-read-btn">Marcar lidas</button>
+          </div>
+          <div class="notif-list" id="notif-list">
+            <div style="padding:20px;text-align:center;color:var(--text3);font-size:13px;">Carregando...</div>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm" id="new-txn-btn">
+        <i data-lucide="plus" style="width:14px;height:14px;"></i>
+        <span class="hide-mobile">Novo Lançamento</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content" id="main-content">
+    <!-- ─── DASHBOARD VIEW ─── -->
+    <div id="view-dashboard">
+      <div class="page-hdr">
+        <div class="page-hdr-left">
+          <h2>Dashboard</h2>
+          <p>Visão geral das suas finanças</p>
+        </div>
+        <div class="page-hdr-right">
+          <select class="account-select" id="account-filter">
+            <option value="">Todas as contas</option>
+            {% for acc in accounts %}
+            <option value="{{ acc.id }}">{{ acc.name }}</option>
+            {% endfor %}
+          </select>
+          <div class="month-nav">
+            <button class="month-nav-btn" id="prev-month"><i data-lucide="chevron-left" style="width:16px;height:16px;"></i></button>
+            <span id="month-label">—</span>
+            <button class="month-nav-btn" id="next-month"><i data-lucide="chevron-right" style="width:16px;height:16px;"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STATS -->
+      <div class="stats-grid">
+        <div class="stat-card balance">
+          <button class="stat-action" id="adjust-balance-btn" title="Ajustar saldo"><i data-lucide="pencil" style="width:13px;height:13px;"></i></button>
+          <div class="stat-icon blue"><i data-lucide="wallet" style="width:20px;height:20px;"></i></div>
+          <div class="stat-label">Saldo Atual</div>
+          <div class="stat-value" id="stat-balance">R$ 0,00</div>
+          <div class="stat-sub">Saldo consolidado das contas</div>
+        </div>
+        <div class="stat-card income">
+          <div class="stat-icon green"><i data-lucide="trending-up" style="width:20px;height:20px;"></i></div>
+          <div class="stat-label">Receitas do Mês</div>
+          <div class="stat-value" id="stat-income">R$ 0,00</div>
+          <div class="stat-sub" id="stat-income-month">—</div>
+        </div>
+        <div class="stat-card expense">
+          <div class="stat-icon red"><i data-lucide="trending-down" style="width:20px;height:20px;"></i></div>
+          <div class="stat-label">Despesas do Mês</div>
+          <div class="stat-value" id="stat-expense">R$ 0,00</div>
+          <div class="stat-sub" id="stat-expense-month">—</div>
+        </div>
+        <div class="stat-card overdue">
+          <div class="stat-icon yellow"><i data-lucide="alert-triangle" style="width:20px;height:20px;"></i></div>
+          <div class="stat-label">Vencidos / Atrasados</div>
+          <div class="stat-value" id="stat-overdue">R$ 0,00</div>
+          <div class="stat-sub"><span id="stat-pending">0</span> pendente(s)</div>
+        </div>
+      </div>
+
+      <!-- CHARTS ROW -->
+      <div class="charts-row">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Fluxo Mensal</span>
+            <select class="account-select" id="chart-year-select" style="padding:5px 10px;font-size:12px;">
+              <option value="2025">2025</option>
+              <option value="2026" selected>2026</option>
+            </select>
+          </div>
+          <div class="card-body"><canvas id="flow-chart" height="80"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Categorias</span>
+            <div style="display:flex;gap:6px;">
+              <button class="filter-btn expense active" id="cat-type-expense">Despesa</button>
+              <button class="filter-btn income" id="cat-type-income">Receita</button>
+            </div>
+          </div>
+          <div class="card-body" style="display:flex;flex-direction:column;align-items:center;gap:16px;">
+            <canvas id="cat-chart" width="200" height="200"></canvas>
+            <div id="cat-legend" style="width:100%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TRANSACTIONS -->
+      <div class="txn-card">
+        <div class="txn-header">
+          <span style="font-size:15px;font-weight:600;">Lançamentos</span>
+          <div class="txn-filters">
+            <button class="filter-btn active" data-type="">Todos</button>
+            <button class="filter-btn income" data-type="income">Receitas</button>
+            <button class="filter-btn expense" data-type="expense">Despesas</button>
+          </div>
+        </div>
+        <div class="txn-table-wrap">
+          <table class="txn-table">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Descrição</th>
+                <th>Categoria</th>
+                <th>Conta</th>
+                <th style="text-align:right">Valor</th>
+                <th style="text-align:center">Status</th>
+                <th style="text-align:center">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="txn-tbody">
+              <tr><td colspan="7"><div class="empty-state"><div class="spinner" style="margin:0 auto;"></div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="txn-pagination">
+          <span id="txn-count">—</span>
+          <div class="page-btns" id="page-btns"></div>
+        </div>
+      </div>
+    </div><!-- /view-dashboard -->
+
+    <!-- ─── OTHER VIEWS (injected dynamically) ─── -->
+    <div id="view-pending" style="display:none"></div>
+    <div id="view-charts" style="display:none"></div>
+    <div id="view-by-category" style="display:none"></div>
+    <div id="view-budgets" style="display:none"></div>
+    <div id="view-accounts" style="display:none"></div>
+    <div id="view-categories" style="display:none"></div>
+    <div id="view-transactions" style="display:none"></div>
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- ═══════════════════════════════════════
+     MODALS
+══════════════════════════════════════════ -->
+
+<!-- New / Edit Transaction -->
+<div class="modal-overlay" id="txn-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title" id="txn-modal-title">Novo Lançamento</span>
+      <button class="modal-close" onclick="closeModal('txn-modal')"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+    </div>
+    <div class="radio-tabs" style="margin-bottom:20px;">
+      <div class="radio-tab expense active" id="tab-expense" onclick="setTxnType('expense')">Débito</div>
+      <div class="radio-tab income" id="tab-income" onclick="setTxnType('income')">Crédito</div>
+    </div>
+    <form id="txn-form">
+      <input type="hidden" id="txn-id" value=""/>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Descrição</label>
+          <input type="text" class="form-control" id="txn-desc" placeholder="Ex: Supermercado" required/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor (R$)</label>
+          <input type="number" step="0.01" min="0.01" class="form-control" id="txn-amount" placeholder="0,00" required/>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Data</label>
+          <input type="date" class="form-control" id="txn-date" required/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Categoria</label>
+          <select class="form-control" id="txn-category">
+            <option value="">Sem categoria</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Conta</label>
+          <select class="form-control" id="txn-account">
+            {% for acc in accounts %}
+            <option value="{{ acc.id }}">{{ acc.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="txn-paid" style="accent-color:var(--green);width:16px;height:16px;"> Já foi pago?
+          </label>
+          <input type="date" class="form-control" id="txn-paid-at" style="margin-top:8px;"/>
+        </div>
+      </div>
+      <!-- Recurrence (new only) -->
+      <div id="recurrence-section">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Repetição</label>
+            <select class="form-control" id="txn-recurrence">
+              <option value="0">Sem repetição</option>
+              <option value="7">Semanalmente</option>
+              <option value="15">Quinzenalmente</option>
+              <option value="1">Mensalmente</option>
+              <option value="2">Bimestralmente</option>
+              <option value="3">Trimestralmente</option>
+              <option value="6">Semestralmente</option>
+              <option value="12">Anualmente</option>
+            </select>
+          </div>
+          <div class="form-group" id="recurrence-times-wrap" style="display:none;">
+            <label class="form-label">Quantas vezes?</label>
+            <select class="form-control" id="txn-recurrence-times">
+              {% for i in range(2, 61) %}<option value="{{ i }}">{{ i }} vezes</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="form-row" id="fixed-day-wrap" style="display:none;">
+          <div class="form-group">
+            <label class="form-label">Dia fixo do mês</label>
+            <select class="form-control" id="txn-fixed-day">
+              <option value="0">Usar dia da data acima</option>
+              {% for i in range(1, 32) %}<option value="{{ i }}">Todo dia {{ i }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="form-group" style="display:flex;align-items:flex-end;padding-bottom:4px;">
+            <span style="font-size:12px;color:var(--text3);">Ex: todo dia 15 de cada mês</span>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Observações</label>
+        <textarea class="form-control" id="txn-notes" rows="2" placeholder="Opcional..."></textarea>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px;">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('txn-modal')">Cancelar</button>
+        <button type="submit" class="btn btn-primary" id="txn-save-btn">
+          <i data-lucide="save" style="width:14px;height:14px;"></i> Salvar
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Adjust Balance -->
+<div class="modal-overlay" id="balance-modal">
+  <div class="modal-box" style="max-width:380px;">
+    <div class="modal-header">
+      <span class="modal-title">Ajuste de Saldo</span>
+      <button class="modal-close" onclick="closeModal('balance-modal')"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+    </div>
+    <form id="balance-form">
+      <div class="form-group">
+        <label class="form-label">Conta</label>
+        <select class="form-control" id="balance-account-select">
+          {% for acc in accounts %}<option value="{{ acc.id }}">{{ acc.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Novo Saldo (R$)</label>
+        <input type="number" step="0.01" class="form-control" id="balance-value" placeholder="0.00" required/>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('balance-modal')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Transfer -->
+<div class="modal-overlay" id="transfer-modal">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-header">
+      <span class="modal-title">Transferência entre Contas</span>
+      <button class="modal-close" onclick="closeModal('transfer-modal')"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+    </div>
+    <form id="transfer-form">
+      <div class="form-group">
+        <label class="form-label">De</label>
+        <select class="form-control" id="transfer-from">
+          {% for acc in accounts %}<option value="{{ acc.id }}">{{ acc.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Para</label>
+        <select class="form-control" id="transfer-to">
+          {% for acc in accounts %}<option value="{{ acc.id }}">{{ acc.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Data</label>
+          <input type="date" class="form-control" id="transfer-date" required/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor (R$)</label>
+          <input type="number" step="0.01" min="0.01" class="form-control" id="transfer-amount" required/>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('transfer-modal')">Cancelar</button>
+        <button type="submit" class="btn btn-primary"><i data-lucide="arrow-left-right" style="width:14px;height:14px;"></i> Transferir</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Delete Confirm -->
+<div class="modal-overlay" id="delete-modal">
+  <div class="modal-box" style="max-width:380px;">
+    <div class="modal-header">
+      <span class="modal-title">Excluir Lançamento</span>
+      <button class="modal-close" onclick="closeModal('delete-modal')"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+    </div>
+    <p style="color:var(--text2);font-size:14px;margin-bottom:16px;">Deseja excluir <strong id="delete-desc"></strong>?</p>
+    <div id="delete-group-section" style="display:none;margin-bottom:16px;padding:12px;background:var(--bg3);border-radius:var(--radius-sm);font-size:13px;color:var(--text2);">
+      Este lançamento faz parte de um grupo recorrente. Deseja excluir apenas este ou o grupo todo?
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+      <button type="button" class="btn btn-ghost" onclick="closeModal('delete-modal')">Cancelar</button>
+      <button type="button" class="btn btn-danger" id="delete-single-btn"><i data-lucide="trash-2" style="width:14px;height:14px;"></i> Excluir</button>
+      <button type="button" class="btn btn-danger" id="delete-group-btn" style="display:none;background:var(--yellow);">Excluir Grupo</button>
+    </div>
+  </div>
+</div>
+
+<!-- Pay modal -->
+<div class="modal-overlay" id="pay-modal">
+  <div class="modal-box" style="max-width:360px;">
+    <div class="modal-header">
+      <span class="modal-title">Marcar como Pago</span>
+      <button class="modal-close" onclick="closeModal('pay-modal')"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+    </div>
+    <form id="pay-form">
+      <input type="hidden" id="pay-txn-id"/>
+      <div class="form-group">
+        <label class="form-label">Data do Pagamento</label>
+        <input type="date" class="form-control" id="pay-date" required/>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('pay-modal')">Cancelar</button>
+        <button type="submit" class="btn btn-success"><i data-lucide="check" style="width:14px;height:14px;"></i> Confirmar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% include "dashboard/scripts.html" %}
+{% endblock %}

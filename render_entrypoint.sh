@@ -24,7 +24,7 @@ print('Tabela alembic_version removida.')
 }
 
 echo "Make..."
-python make_admin.py
+##python make_admin.py
 
 echo "Iniciando servidor..."
 exec gunicorn -w 2 -b 0.0.0.0:$PORT "wsgi:app"

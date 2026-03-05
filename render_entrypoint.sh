@@ -52,6 +52,10 @@ import psycopg
 
 url = os.environ["DATABASE_URL"]
 
+# remover driver do SQLAlchemy
+if url.startswith("postgresql+psycopg://"):
+    url = url.replace("postgresql+psycopg://", "postgresql://", 1)
+
 if url.startswith("postgres://"):
     url = url.replace("postgres://", "postgresql://", 1)
 
@@ -64,6 +68,10 @@ EOF
 
     flask db upgrade
 }
+
+echo "🌱 make inicial..."
+
+python make_admin.py
 
 echo "Iniciando servidor..."
 
